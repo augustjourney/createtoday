@@ -1,0 +1,18 @@
+### Login
+POST http://localhost:8000/hero/auth/login
+Accept: application/json
+
+{
+  "email": "{{email}}",
+  "password":"{{password}}"
+}
+
+> {%
+    client.global.set("auth_token", response.body.data.token)
+%}
+
+
+### Profile
+GET http://localhost:8000/hero/profile
+Accept: application/json
+Authorization: Bearer {{auth_token}}
