@@ -3,7 +3,6 @@ package app
 import (
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/controller"
-	"createtodayapi/internal/logger"
 	"createtodayapi/internal/middleware"
 	"createtodayapi/internal/service"
 	"createtodayapi/internal/storage/postgres"
@@ -13,9 +12,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func New(db *sqlx.DB) *fiber.App {
-	config := config.New()
-	logger := logger.New()
+func New(db *sqlx.DB, config *config.Config) *fiber.App {
+
 	// создать все репозитории
 	usersRepo := postgres.NewUsersRepo(db)
 
@@ -27,14 +25,12 @@ func New(db *sqlx.DB) *fiber.App {
 	profileController := controller.NewProfileController(profileService)
 	authController := controller.NewAuthController(authService)
 
-	router := fiber.New()
+	app := fiber.New()
 
-	router.Get("/hero/profile", func(ctx *fiber.Ctx) error {
+	app.Get("/hero/profile", func(ctx *fiber.Ctx) error {
 		return middleware.Auth(ctx, authService)
 	}, profileController.GetProfile)
-	router.Post("/hero/auth/login", authController.Login)
+	app.Post("/hero/auth/login", authController.Login)
 
-	logger.Info("App compiled")
-
-	return router
+	return app
 }
