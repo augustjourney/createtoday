@@ -53,11 +53,11 @@ func (r *UsersRepo) GetProfileByUserId(ctx context.Context, userId int) (*entity
 }
 
 func (r *UsersRepo) CreateUser(ctx context.Context, user entity.User) error {
-
-	_, err := r.db.ExecContext(ctx, `
-		insert into users (email, password)
-		values ($1, $2)
-	`, user.Email, user.Password)
+	q := fmt.Sprintf(`
+		insert into %s (email, password, first_name)
+		values ($1, $2, $3)
+	`, UsersTable)
+	_, err := r.db.ExecContext(ctx, q, user.Email, user.Password, user.FirstName)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
