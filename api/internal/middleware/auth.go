@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v4"
 	"strings"
 )
 
@@ -28,13 +27,19 @@ func Auth(ctx *fiber.Ctx, auth *service.Auth) error {
 
 	token := authHeaderData[1]
 
-	err, user := auth.ValidateJWTToken(context.Background(), token)
+	user, err := auth.ValidateJWTToken(context.Background(), token)
 
 	if err != nil {
-		if errors.As(err, &jwt.ErrTokenExpired) {
+		if errors.Is(err, common.ErrTokenExpired) {
 			logger.Log.Warn("Token expired")
 			return common.DoApiResponse(ctx, 403, nil, nil)
 		}
+
+		if errors.Is(err, common.ErrInvalidToken) {
+			logger.Log.Warn("Invalid token")
+			return common.DoApiResponse(ctx, 403, nil, nil)
+		}
+
 		logger.Log.Error(fmt.Sprintf("Not valid token %s", err.Error()))
 		return common.DoApiResponse(ctx, 500, nil, err)
 	}
