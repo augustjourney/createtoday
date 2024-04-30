@@ -1,5 +1,5 @@
 ### Login
-POST http://localhost:8000/hero/auth/login
+POST http://localhost:8080/hero/auth/login
 Accept: application/json
 
 {
@@ -8,11 +8,44 @@ Accept: application/json
 }
 
 > {%
-    client.global.set("auth_token", response.body.data.token)
+    client.global.set("auth_token", response.body.result.token)
+%}
+
+### Get Magic Link
+POST http://localhost:8080/hero/auth/login/get-magic-link
+Accept: application/json
+
+{
+  "email": "{{email}}"
+}
+
+### Validate Magic Link
+POST http://localhost:8080/hero/auth/login/validate-magic-link
+Accept: application/json
+
+{
+  "token": "{{magic-link-token}}"
+}
+> {%
+    client.global.set("auth_token", response.body.result.token)
+%}
+
+### Singup
+POST http://localhost:8080/hero/auth/signup
+Accept: application/json
+
+{
+  "email": "some-working-email@example.com",
+  "password":"some-new-password",
+  "first_name": "Your name"
+}
+
+> {%
+    client.global.set("auth_token", response.body.result.token)
 %}
 
 
 ### Profile
-GET http://localhost:8000/hero/profile
+GET http://localhost:8080/hero/profile
 Accept: application/json
 Authorization: Bearer {{auth_token}}
