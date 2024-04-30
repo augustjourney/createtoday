@@ -1,0 +1,56 @@
+<html lang='en'>
+
+<head>
+    <meta charset='UTF-8'/>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'/>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'/>
+    <title>{{ .Subject }}</title>
+    <style>
+        .container {
+            display: block;
+            padding: 0;
+            padding-top: 25px;
+            max-width: 600px;
+            width: 100%;
+            margin: 0;
+        }
+
+        .container p {
+            font-family: Arial;
+            font-size: 16px;
+            line-height: 20px;
+            color: #333;
+            padding: 0;
+            margin: 0;
+            display: block;
+            margin-bottom: 1.5em
+        }
+
+        .container a {
+            color: #0284c7;
+            text-decoration: none;
+        }
+
+        .container a.btn {
+            padding: 15px 30px;
+            display: inline-block;
+            font-family: Arial;
+            border-radius: 7px;
+            margin-bottom: 1.5em;
+            letter-spacing: 0.6px;
+            font-size: 16px;
+            line-height: 16px;
+            background-color: #0c4a6e;
+            color: #f0f9ff;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+<div class='container'>
+    {{ .Context.Body }}
+</div>
+</body>
+
+</html>
