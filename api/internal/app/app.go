@@ -5,6 +5,7 @@ import (
 	"createtodayapi/internal/controller"
 	"createtodayapi/internal/middleware"
 	"createtodayapi/internal/service"
+	"createtodayapi/internal/storage/memory"
 	"createtodayapi/internal/storage/postgres"
 
 	"github.com/jmoiron/sqlx"
@@ -16,10 +17,12 @@ func New(db *sqlx.DB, config *config.Config) *fiber.App {
 
 	// создать все репозитории
 	usersRepo := postgres.NewUsersRepo(db)
+	emailsRepo := memory.NewEmailsRepo()
 
 	// создать все сервисы
+	emailService := service.NewEmailService(config, emailsRepo)
 	profileService := service.NewProfileService(usersRepo)
-	authService := service.NewAuthService(usersRepo, config)
+	authService := service.NewAuthService(usersRepo, config, emailService)
 
 	// создать все контроллеры
 	profileController := controller.NewProfileController(profileService)
@@ -31,6 +34,9 @@ func New(db *sqlx.DB, config *config.Config) *fiber.App {
 		return middleware.Auth(ctx, authService)
 	}, profileController.GetProfile)
 	app.Post("/hero/auth/login", authController.Login)
+	app.Post("/hero/auth/login/get-magic-link", authController.GetMagicLink)
+	app.Post("/hero/auth/login/validate-magic-link", authController.ValidateMagicLink)
+	app.Post("/hero/auth/signup", authController.Signup)
 
 	return app
 }
