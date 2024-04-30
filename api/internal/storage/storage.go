@@ -11,3 +11,7 @@ type Users interface {
 	FindById(ctx context.Context, id int) (*entity.User, error)
 	GetProfileByUserId(ctx context.Context, userId int) (*entity.Profile, error)
 }
+
+type Emails interface {
+	FindByType(ctx context.Context, emailType string) (*entity.Email, error)
+}
