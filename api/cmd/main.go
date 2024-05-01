@@ -6,6 +6,7 @@ import (
 	"createtodayapi/internal/infra"
 	"createtodayapi/internal/logger"
 	"fmt"
+	"github.com/pressly/goose/v3"
 )
 
 func main() {
@@ -18,9 +19,29 @@ func main() {
 		return
 	}
 
-	s := app.New(db, conf)
+	err = goose.SetDialect("postgres")
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
 
-	err = s.Listen(conf.ServerAddress)
+	version, err := goose.GetDBVersion(db.DB)
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	log.Info(fmt.Sprintf("database version: %v", version))
+
+	err = goose.Up(db.DB, "db/migrations")
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	server := app.New(db, conf)
+
+	err = server.Listen(conf.ServerAddress)
 
 	if err != nil {
 		log.Error(err.Error())
