@@ -113,11 +113,11 @@ func (s *Auth) Login(ctx context.Context, body *dto.LoginBody) (*dto.LoginResult
 	user, err := s.repo.FindByEmail(ctx, body.Email)
 
 	if err != nil {
+		if errors.Is(err, common.ErrUserNotFound) {
+			return nil, common.ErrWrongCredentials
+		}
+		logger.Log.Error(err.Error(), "error", err)
 		return nil, common.ErrInternalError
-	}
-
-	if user == nil {
-		return nil, common.ErrUserNotFound
 	}
 
 	if !s.passwordMatches(user.Password, body.Password) {
