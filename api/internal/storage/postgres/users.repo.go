@@ -6,6 +6,7 @@ import (
 	"createtodayapi/internal/entity"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -21,8 +22,11 @@ const UsersTable = "public.user"
 func (r *UsersRepo) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
 	q := fmt.Sprintf(`select id, email, password from %s where email = $1`, UsersTable)
 	var user entity.User
-	err := r.db.Get(&user, q, email)
+	err := r.db.GetContext(ctx, &user, q, email)
 	if err != nil {
+		if errors.As(err, &pgx.ErrNoRows) {
+			return nil, common.ErrUserNotFound
+		}
 		return nil, err
 	}
 	return &user, nil
@@ -33,6 +37,9 @@ func (r *UsersRepo) FindById(ctx context.Context, id int) (*entity.User, error) 
 	var user entity.User
 	err := r.db.GetContext(ctx, &user, q, id)
 	if err != nil {
+		if errors.As(err, &pgx.ErrNoRows) {
+			return nil, common.ErrUserNotFound
+		}
 		return nil, err
 	}
 	return &user, nil
@@ -47,6 +54,9 @@ func (r *UsersRepo) GetProfileByUserId(ctx context.Context, userId int) (*entity
 	var profile entity.Profile
 	err := r.db.GetContext(ctx, &profile, q, userId)
 	if err != nil {
+		if errors.As(err, &pgx.ErrNoRows) {
+			return nil, common.ErrUserNotFound
+		}
 		return nil, err
 	}
 	return &profile, nil
