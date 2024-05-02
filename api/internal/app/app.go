@@ -18,6 +18,7 @@ func New(db *sqlx.DB, config *config.Config) *fiber.App {
 	// создать все репозитории
 	usersRepo := postgres.NewUsersRepo(db)
 	emailsRepo := memory.NewEmailsRepo()
+	productsRepo := postgres.NewProductsRepo(db)
 
 	// создать все сервисы
 	emailService := service.NewEmailService(config, emailsRepo)
@@ -27,6 +28,7 @@ func New(db *sqlx.DB, config *config.Config) *fiber.App {
 	// создать все контроллеры
 	profileController := controller.NewProfileController(profileService)
 	authController := controller.NewAuthController(authService)
+	productsController := controller.NewProductController(productsRepo)
 
 	app := fiber.New()
 
@@ -37,6 +39,9 @@ func New(db *sqlx.DB, config *config.Config) *fiber.App {
 	app.Post("/hero/auth/login/get-magic-link", authController.GetMagicLink)
 	app.Post("/hero/auth/login/validate-magic-link", authController.ValidateMagicLink)
 	app.Post("/hero/auth/signup", authController.Signup)
+	app.Get("/hero/courses", func(ctx *fiber.Ctx) error {
+		return middleware.Auth(ctx, authService)
+	}, productsController.GetUsersProducts)
 
 	return app
 }
