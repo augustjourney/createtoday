@@ -17,8 +17,6 @@ type UsersRepo struct {
 	db *sqlx.DB
 }
 
-const UsersTable = "public.user"
-
 func (r *UsersRepo) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
 	q := fmt.Sprintf(`select id, email, password from %s where email = $1`, UsersTable)
 	var user entity.User
