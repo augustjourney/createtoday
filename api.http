@@ -49,3 +49,8 @@ Accept: application/json
 GET http://localhost:8080/hero/profile
 Accept: application/json
 Authorization: Bearer {{auth_token}}
+
+### Courses
+GET http://localhost:8080/hero/courses
+Accept: application/json
+Authorization: Bearer {{auth_token}}
