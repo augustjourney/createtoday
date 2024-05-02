@@ -15,3 +15,7 @@ type Users interface {
 type Emails interface {
 	FindByType(ctx context.Context, emailType string) (*entity.Email, error)
 }
+
+type Products interface {
+	GetUsersProducts(ctx context.Context, userId int) ([]entity.UserProductCard, error)
+}
