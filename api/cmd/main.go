@@ -25,18 +25,20 @@ func main() {
 		return
 	}
 
-	version, err := goose.GetDBVersion(db.DB)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
+	if conf.Env == "dev" {
+		version, err := goose.GetDBVersion(db.DB)
+		if err != nil {
+			log.Error(err.Error())
+			return
+		}
 
-	log.Info(fmt.Sprintf("database version: %v", version))
+		log.Info(fmt.Sprintf("database version: %v", version))
 
-	err = goose.Up(db.DB, "db/migrations")
-	if err != nil {
-		log.Error(err.Error())
-		return
+		err = goose.Up(db.DB, "db/migrations")
+		if err != nil {
+			log.Error(err.Error())
+			return
+		}
 	}
 
 	server := app.New(db, conf)
