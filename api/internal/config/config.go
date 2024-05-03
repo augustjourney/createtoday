@@ -22,6 +22,7 @@ type Config struct {
 	AwsSecretAccessKey string `env:"AWS_SECRET_ACCESS_KEY"`
 	AwsAccessKeyId     string `env:"AWS_ACCESS_KEY_ID"`
 	AwsRegion          string `env:"AWS_REGION"`
+	Env                string `env:"ENV"` // dev, stage, prod
 }
 
 var config Config
@@ -35,11 +36,13 @@ func init() {
 func New() *Config {
 	var flagServerAddress = flag.String("a", "localhost:8080", "Server address on which server is running")
 	var flagDatabaseDSN = flag.String("d", "", "Database DSN")
+	var flagEnv = flag.String("e", "", "Environment")
 
 	config.JwtSigningMethod = jwt.SigningMethodHS256
 	config.JwtTokenExp = time.Hour * 720
 	config.MagicLinkExp = time.Minute * 1
 	config.ServerAddress = *flagServerAddress
+	config.Env = "dev"
 
 	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
 		config.DatabaseDSN = databaseDSN
@@ -47,6 +50,14 @@ func New() *Config {
 
 	if *flagDatabaseDSN != "" {
 		config.DatabaseDSN = *flagDatabaseDSN
+	}
+
+	if env := os.Getenv("ENV"); env != "" {
+		config.Env = env
+	}
+
+	if *flagEnv != "" {
+		config.Env = *flagEnv
 	}
 
 	if JwtTokenSecretKey := os.Getenv("JWT_TOKEN_SECRET_KEY"); JwtTokenSecretKey != "" {
