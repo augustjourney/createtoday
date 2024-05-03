@@ -8,11 +8,11 @@ import (
 	"createtodayapi/internal/storage"
 )
 
-type Profile struct {
+type ProfileService struct {
 	repo storage.Users
 }
 
-func (s *Profile) GetProfile(ctx context.Context, userId int) (*entity.Profile, error) {
+func (s *ProfileService) GetProfile(ctx context.Context, userId int) (*entity.Profile, error) {
 	profile, err := s.repo.GetProfileByUserId(ctx, userId)
 
 	if err != nil {
@@ -23,8 +23,8 @@ func (s *Profile) GetProfile(ctx context.Context, userId int) (*entity.Profile, 
 	return profile, nil
 }
 
-func NewProfileService(repo storage.Users) *Profile {
-	return &Profile{
+func NewProfileService(repo storage.Users) *ProfileService {
+	return &ProfileService{
 		repo: repo,
 	}
 }

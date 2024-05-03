@@ -22,13 +22,13 @@ type Claims struct {
 	UserID int `json:"user_id"`
 }
 
-type Auth struct {
+type AuthService struct {
 	config *config.Config
 	repo   storage.Users
 	emails *EmailsService
 }
 
-func (s *Auth) Signup(ctx context.Context, body *dto.SignupBody) (*dto.SignUpResult, error) {
+func (s *AuthService) Signup(ctx context.Context, body *dto.SignupBody) (*dto.SignUpResult, error) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 
@@ -112,7 +112,7 @@ func (s *Auth) Signup(ctx context.Context, body *dto.SignupBody) (*dto.SignUpRes
 
 }
 
-func (s *Auth) Login(ctx context.Context, body *dto.LoginBody) (*dto.LoginResult, error) {
+func (s *AuthService) Login(ctx context.Context, body *dto.LoginBody) (*dto.LoginResult, error) {
 
 	user, err := s.repo.FindByEmail(ctx, body.Email)
 
@@ -141,7 +141,7 @@ func (s *Auth) Login(ctx context.Context, body *dto.LoginBody) (*dto.LoginResult
 
 }
 
-func (s *Auth) GetMagicLink(ctx context.Context, to string) error {
+func (s *AuthService) GetMagicLink(ctx context.Context, to string) error {
 	user, err := s.repo.FindByEmail(ctx, to)
 	if err != nil {
 		logger.Log.Error(err.Error(), "error", err)
@@ -180,7 +180,7 @@ func (s *Auth) GetMagicLink(ctx context.Context, to string) error {
 	return nil
 }
 
-func (s *Auth) ValidateMagicLink(ctx context.Context, token string) (*dto.LoginResult, error) {
+func (s *AuthService) ValidateMagicLink(ctx context.Context, token string) (*dto.LoginResult, error) {
 	user, err := s.ValidateJWTToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, common.ErrTokenExpired) {
@@ -206,7 +206,7 @@ func (s *Auth) ValidateMagicLink(ctx context.Context, token string) (*dto.LoginR
 
 }
 
-func (s *Auth) createMagicLink(userId int) (string, error) {
+func (s *AuthService) createMagicLink(userId int) (string, error) {
 
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -228,7 +228,7 @@ func (s *Auth) createMagicLink(userId int) (string, error) {
 	return magicLink, nil
 }
 
-func (s *Auth) createJWTToken(userId int) (string, error) {
+func (s *AuthService) createJWTToken(userId int) (string, error) {
 
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -248,7 +248,7 @@ func (s *Auth) createJWTToken(userId int) (string, error) {
 	return tokenString, nil
 }
 
-func (s *Auth) ValidateJWTToken(ctx context.Context, token string) (*entity.User, error) {
+func (s *AuthService) ValidateJWTToken(ctx context.Context, token string) (*entity.User, error) {
 	claims := Claims{}
 	data, err := jwt.ParseWithClaims(token, &claims,
 		func(t *jwt.Token) (interface{}, error) {
@@ -284,13 +284,13 @@ func (s *Auth) ValidateJWTToken(ctx context.Context, token string) (*entity.User
 	return user, nil
 }
 
-func (s *Auth) passwordMatches(hash string, password string) bool {
+func (s *AuthService) passwordMatches(hash string, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-func NewAuthService(repo storage.Users, config *config.Config, emailService *EmailsService) *Auth {
-	return &Auth{
+func NewAuthService(repo storage.Users, config *config.Config, emailService *EmailsService) *AuthService {
+	return &AuthService{
 		repo:   repo,
 		config: config,
 		emails: emailService,

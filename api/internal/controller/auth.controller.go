@@ -13,7 +13,7 @@ import (
 )
 
 type AuthController struct {
-	service *service.Auth
+	service service.Auth
 }
 
 func (c *AuthController) Login(ctx *fiber.Ctx) error {
@@ -84,10 +84,6 @@ func (c *AuthController) Signup(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, result, nil)
 }
 
-func (c *AuthController) Logout(ctx *fiber.Ctx) error {
-	return nil
-}
-
 func (c *AuthController) GetMagicLink(ctx *fiber.Ctx) error {
 	var body dto.GetMagicLinkBody
 	err := json.Unmarshal(ctx.Body(), &body)
@@ -148,7 +144,7 @@ func (c *AuthController) ValidateMagicLink(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, result, nil)
 }
 
-func NewAuthController(service *service.Auth) *AuthController {
+func NewAuthController(service service.Auth) *AuthController {
 	return &AuthController{
 		service: service,
 	}

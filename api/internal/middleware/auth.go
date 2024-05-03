@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func Auth(ctx *fiber.Ctx, auth *service.Auth) error {
+func Auth(ctx *fiber.Ctx, auth service.Auth) error {
 	authHeader := ctx.Get("authorization")
 
 	if authHeader == "" {

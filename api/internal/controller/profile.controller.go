@@ -9,7 +9,7 @@ import (
 )
 
 type ProfileController struct {
-	service *service.Profile
+	service service.Profile
 }
 
 func (c *ProfileController) GetProfile(ctx *fiber.Ctx) error {
@@ -27,7 +27,7 @@ func (c *ProfileController) GetProfile(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, profile, nil)
 }
 
-func NewProfileController(service *service.Profile) *ProfileController {
+func NewProfileController(service service.Profile) *ProfileController {
 	return &ProfileController{
 		service: service,
 	}
