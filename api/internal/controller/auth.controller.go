@@ -73,10 +73,10 @@ func (c *AuthController) Signup(ctx *fiber.Ctx) error {
 		return common.DoApiResponse(ctx, 500, nil, common.ErrInternalError)
 	}
 
-	if result.Token != "" {
+	if result.Token != nil {
 		tokenCookie := new(fiber.Cookie)
 		tokenCookie.Name = "token"
-		tokenCookie.Value = result.Token
+		tokenCookie.Value = *result.Token
 
 		ctx.Cookie(tokenCookie)
 	}

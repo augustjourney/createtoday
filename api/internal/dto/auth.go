@@ -65,6 +65,7 @@ func (b *SignupBody) Validate() error {
 }
 
 type SignUpResult struct {
-	AlreadyExists bool   `json:"alreadyExists"`
-	Token         string `json:"token"`
+	AlreadyExists bool    `json:"alreadyExists"`
+	Token         *string `json:"token"`
+	Message       string  `json:"message,omitempty"`
 }

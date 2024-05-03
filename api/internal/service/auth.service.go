@@ -85,15 +85,18 @@ func (s *Auth) Signup(ctx context.Context, body *dto.SignupBody) (*dto.SignUpRes
 			logger.Log.Error(err.Error())
 			return nil, common.ErrInternalError
 		}
+
+		result.Message = "Регистрация прошла успешно! На твою почту было отправлено письмо с данными для входа"
+
+		return &result, nil
 	}
 
 	// Если пользователь уже существовал и его пароль при попытке создать аккаунт
 	// Совпадает с тем, который есть в базе — значит, можем его авторизовать
 	// А если не совпадает, то отдает результат — что такой аккаунт уже есть
-	if result.AlreadyExists {
-		if !s.passwordMatches(foundUser.Password, body.Password) {
-			return &result, nil
-		}
+	if !s.passwordMatches(foundUser.Password, body.Password) {
+		result.Message = "Оу, оказывается, у тебя уже есть аккаунт"
+		return &result, nil
 	}
 
 	token, err := s.createJWTToken(foundUser.ID)
@@ -102,7 +105,8 @@ func (s *Auth) Signup(ctx context.Context, body *dto.SignupBody) (*dto.SignUpRes
 		return &result, common.ErrInternalError
 	}
 
-	result.Token = token
+	result.Token = &token
+	result.Message = "Привет. С возвращением!"
 
 	return &result, nil
 
