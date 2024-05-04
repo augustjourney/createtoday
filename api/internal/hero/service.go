@@ -22,6 +22,9 @@ type IService interface {
 	GetProfile(ctx context.Context, userId int) (*Profile, error)
 
 	GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error)
+	GetUserAccessibleProduct(ctx context.Context, courseSlug string, userId int) (*ProductInfo, error)
+
+	GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error)
 }
 
 type Claims struct {
@@ -55,6 +58,53 @@ func (s *Service) GetUserAccessibleProducts(ctx context.Context, userId int) ([]
 	}
 
 	return products, nil
+}
+
+func (s *Service) GetUserAccessibleProduct(ctx context.Context, courseSlug string, userId int) (*ProductInfo, error) {
+	product, err := s.repo.GetUserAccessibleProduct(ctx, courseSlug, userId)
+
+	if errors.Is(err, common.ErrProductNotFound) {
+		return nil, common.ErrProductNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return nil, common.ErrInternalError
+	}
+
+	if product == nil {
+		return nil, common.ErrProductNotFound
+	}
+
+	lessons, err := s.repo.GetProductLessons(ctx, product.ID)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return nil, common.ErrInternalError
+	}
+
+	product.Lessons = lessons
+
+	return product, nil
+}
+
+func (s *Service) GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error) {
+	lesson, err := s.repo.GetUserAccessibleLesson(ctx, lessonSlug, userId)
+
+	if errors.Is(err, common.ErrLessonNotFound) {
+		return nil, common.ErrLessonNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return nil, common.ErrInternalError
+	}
+
+	if lesson == nil {
+		return nil, common.ErrLessonNotFound
+	}
+
+	return lesson, nil
 }
 
 func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {

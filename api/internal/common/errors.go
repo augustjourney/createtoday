@@ -21,3 +21,9 @@ var ErrInvalidMagicLink = errors.New("Некорректная ссылка")
 // projects
 var ErrProjectAlreadyExists = errors.New("Такой проект уже существует")
 var ErrProjectNotFound = errors.New("Проект не найден")
+
+// products
+var ErrProductNotFound = errors.New("Такой курс не найден или у вас нет к нему доступа")
+
+// lessons
+var ErrLessonNotFound = errors.New("Такой урок не найден или у вас нет к нему доступа")

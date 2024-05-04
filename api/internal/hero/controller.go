@@ -180,6 +180,32 @@ func (c *Controller) GetUserAccessibleProducts(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, products, nil)
 }
 
+func (c *Controller) GetUserAccessibleProduct(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+	slug := ctx.Params("slug")
+	product, err := c.service.GetUserAccessibleProduct(context.Background(), slug, user.ID)
+	if errors.Is(err, common.ErrProductNotFound) {
+		return common.DoApiResponse(ctx, 404, nil, common.ErrProductNotFound)
+	}
+	if err != nil {
+		return common.DoApiResponse(ctx, 500, nil, err)
+	}
+	return common.DoApiResponse(ctx, 200, product, nil)
+}
+
+func (c *Controller) GetUserAccessibleLesson(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+	slug := ctx.Params("slug")
+	lesson, err := c.service.GetUserAccessibleLesson(context.Background(), slug, user.ID)
+	if errors.Is(err, common.ErrLessonNotFound) {
+		return common.DoApiResponse(ctx, 404, nil, err)
+	}
+	if err != nil {
+		return common.DoApiResponse(ctx, 500, nil, err)
+	}
+	return common.DoApiResponse(ctx, 200, lesson, nil)
+}
+
 func NewController(service IService) *Controller {
 	return &Controller{
 		service: service,

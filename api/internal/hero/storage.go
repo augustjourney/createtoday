@@ -15,4 +15,9 @@ type Storage interface {
 
 	// products
 	GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error)
+	GetUserAccessibleProduct(ctx context.Context, productSlug string, userId int) (*ProductInfo, error)
+	GetProductLessons(ctx context.Context, productId int) ([]LessonCard, error)
+
+	// lessons
+	GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error)
 }

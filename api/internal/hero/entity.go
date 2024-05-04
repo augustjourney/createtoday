@@ -79,3 +79,34 @@ type Product struct {
 	Settings                 *json.RawMessage `json:"settings" db:"settings"`
 	ShowLessonsWithoutAccess bool             `json:"show_lessons_without_access" db:"show_lessons_without_access"`
 }
+
+type ProductInfo struct {
+	ID                       int              `json:"-" db:"id"`
+	Name                     string           `json:"name" db:"name"`
+	Slug                     string           `json:"slug" db:"slug"`
+	Description              *string          `json:"description" db:"description"`
+	Layout                   string           `json:"layout" db:"layout"`
+	Cover                    *json.RawMessage `json:"cover" db:"cover"`
+	ProjectID                int              `json:"-" db:"project_id"`
+	Settings                 *json.RawMessage `json:"settings" db:"settings"`
+	ShowLessonsWithoutAccess bool             `json:"show_lessons_without_access" db:"show_lessons_without_access"`
+	Lessons                  []LessonCard     `json:"lessons"`
+}
+
+type LessonCard struct {
+	Name        string  `json:"name" db:"name"`
+	Slug        string  `json:"slug" db:"slug"`
+	Description *string `json:"description" db:"description"`
+}
+
+type LessonInfo struct {
+	ID          int              `json:"-" db:"id"`
+	Name        string           `json:"name" db:"name"`
+	Slug        string           `json:"slug" db:"slug"`
+	Description *string          `json:"description" db:"description"`
+	Content     *json.RawMessage `json:"content" db:"content"`
+	CanComplete bool             `json:"can_complete" db:"can_complete"`
+	Settings    *json.RawMessage `json:"settings" db:"settings"`
+	IsPublic    bool             `json:"-" db:"is_public"`
+	Product     json.RawMessage  `json:"product" db:"product"`
+}
