@@ -45,6 +45,14 @@ type Product struct {
 	CreatedBy                int             `json:"created_by" db:"created_by"`
 }
 
+type NewProduct struct {
+	Name      string `json:"name" db:"name"`
+	Slug      string `json:"slug" db:"slug"`
+	ProjectID int    `json:"project_id" db:"project_id"`
+	CreatedBy int    `json:"created_by" db:"created_by"`
+	Position  int    `json:"position" db:"position"`
+}
+
 type UserProduct struct {
 	ID                       int             `json:"id" db:"id"`
 	Name                     string          `json:"name" db:"name"`
