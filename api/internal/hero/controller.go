@@ -3,7 +3,6 @@ package hero
 import (
 	"context"
 	"createtodayapi/internal/common"
-	"createtodayapi/internal/entity"
 	"createtodayapi/internal/logger"
 	"encoding/json"
 	"errors"
@@ -158,7 +157,7 @@ func (c *Controller) ValidateMagicLink(ctx *fiber.Ctx) error {
 }
 
 func (c *Controller) GetProfile(ctx *fiber.Ctx) error {
-	user := ctx.Locals("user").(*entity.User)
+	user := ctx.Locals("user").(*User)
 	profile, err := c.service.GetProfile(context.Background(), user.ID)
 
 	if err != nil {
@@ -173,7 +172,7 @@ func (c *Controller) GetProfile(ctx *fiber.Ctx) error {
 }
 
 func (c *Controller) GetUserAccessibleProducts(ctx *fiber.Ctx) error {
-	user := ctx.Locals("user").(*entity.User)
+	user := ctx.Locals("user").(*User)
 	products, err := c.service.GetUserAccessibleProducts(context.Background(), user.ID)
 	if err != nil {
 		return common.DoApiResponse(ctx, 500, nil, err)

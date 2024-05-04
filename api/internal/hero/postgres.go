@@ -3,7 +3,6 @@ package hero
 import (
 	"context"
 	"createtodayapi/internal/common"
-	"createtodayapi/internal/entity"
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
@@ -25,9 +24,9 @@ type PostgresRepo struct {
 	db *sqlx.DB
 }
 
-func (r *PostgresRepo) FindUserByEmail(ctx context.Context, email string) (*entity.User, error) {
+func (r *PostgresRepo) FindUserByEmail(ctx context.Context, email string) (*User, error) {
 	q := fmt.Sprintf(`select id, email, password from %s where email = $1`, UsersTable)
-	var user entity.User
+	var user User
 	err := r.db.GetContext(ctx, &user, q, email)
 	if err != nil {
 		if errors.As(err, &pgx.ErrNoRows) {
@@ -38,9 +37,9 @@ func (r *PostgresRepo) FindUserByEmail(ctx context.Context, email string) (*enti
 	return &user, nil
 }
 
-func (r *PostgresRepo) FindUserById(ctx context.Context, id int) (*entity.User, error) {
+func (r *PostgresRepo) FindUserById(ctx context.Context, id int) (*User, error) {
 	q := fmt.Sprintf(`select id, email from %s where id = $1`, UsersTable)
-	var user entity.User
+	var user User
 	err := r.db.GetContext(ctx, &user, q, id)
 	if err != nil {
 		if errors.As(err, &pgx.ErrNoRows) {
@@ -51,13 +50,13 @@ func (r *PostgresRepo) FindUserById(ctx context.Context, id int) (*entity.User, 
 	return &user, nil
 }
 
-func (r *PostgresRepo) GetProfileByUserId(ctx context.Context, userId int) (*entity.Profile, error) {
+func (r *PostgresRepo) GetProfileByUserId(ctx context.Context, userId int) (*Profile, error) {
 	q := fmt.Sprintf(`
 		select email, first_name, last_name, phone, avatar, telegram, instagram 
 		from %s where id = $1`,
 		UsersTable,
 	)
-	var profile entity.Profile
+	var profile Profile
 	err := r.db.GetContext(ctx, &profile, q, userId)
 	if err != nil {
 		if errors.As(err, &pgx.ErrNoRows) {
@@ -68,7 +67,7 @@ func (r *PostgresRepo) GetProfileByUserId(ctx context.Context, userId int) (*ent
 	return &profile, nil
 }
 
-func (r *PostgresRepo) CreateUser(ctx context.Context, user entity.User) error {
+func (r *PostgresRepo) CreateUser(ctx context.Context, user User) error {
 	q := fmt.Sprintf(`
 		insert into %s (email, password, first_name)
 		values ($1, $2, $3)
@@ -88,15 +87,15 @@ func (r *PostgresRepo) CreateUser(ctx context.Context, user entity.User) error {
 	return err
 }
 
-func (r *PostgresRepo) GetUserAccessibleProducts(ctx context.Context, userId int) ([]entity.UserProductCard, error) {
+func (r *PostgresRepo) GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error) {
 	q := fmt.Sprintf("select distinct on (id) name, description, slug, cover, settings from %s where user_id = $1", UsersProductsView)
-	var products []entity.UserProductCard
+	var products []ProductCard
 	err := r.db.SelectContext(ctx, &products, q, userId)
 	if err != nil {
 		return products, err
 	}
 	if products == nil {
-		return []entity.UserProductCard{}, nil
+		return []ProductCard{}, nil
 	}
 	return products, nil
 }

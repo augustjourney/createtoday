@@ -4,7 +4,6 @@ import (
 	"context"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
-	"createtodayapi/internal/entity"
 	"createtodayapi/internal/logger"
 	"errors"
 	"fmt"
@@ -18,11 +17,11 @@ type IService interface {
 	Login(ctx context.Context, body *LoginBody) (*LoginResult, error)
 	GetMagicLink(ctx context.Context, to string) error
 	ValidateMagicLink(ctx context.Context, token string) (*LoginResult, error)
-	ValidateJWTToken(ctx context.Context, token string) (*entity.User, error)
+	ValidateJWTToken(ctx context.Context, token string) (*User, error)
 
-	GetProfile(ctx context.Context, userId int) (*entity.Profile, error)
+	GetProfile(ctx context.Context, userId int) (*Profile, error)
 
-	GetUserAccessibleProducts(ctx context.Context, userId int) ([]entity.UserProductCard, error)
+	GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error)
 }
 
 type Claims struct {
@@ -36,7 +35,7 @@ type Service struct {
 	emails IEmailsService
 }
 
-func (s *Service) GetProfile(ctx context.Context, userId int) (*entity.Profile, error) {
+func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) {
 	profile, err := s.repo.GetProfileByUserId(ctx, userId)
 
 	if err != nil {
@@ -47,7 +46,7 @@ func (s *Service) GetProfile(ctx context.Context, userId int) (*entity.Profile, 
 	return profile, nil
 }
 
-func (s *Service) GetUserAccessibleProducts(ctx context.Context, userId int) ([]entity.UserProductCard, error) {
+func (s *Service) GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error) {
 	products, err := s.repo.GetUserAccessibleProducts(ctx, userId)
 
 	if err != nil {
@@ -66,7 +65,7 @@ func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, 
 		return nil, common.ErrInternalError
 	}
 
-	user := entity.User{
+	user := User{
 		Email:     body.Email,
 		Password:  string(hashedPassword),
 		FirstName: body.FirstName,
@@ -278,7 +277,7 @@ func (s *Service) createJWTToken(userId int) (string, error) {
 	return tokenString, nil
 }
 
-func (s *Service) ValidateJWTToken(ctx context.Context, token string) (*entity.User, error) {
+func (s *Service) ValidateJWTToken(ctx context.Context, token string) (*User, error) {
 	claims := Claims{}
 	data, err := jwt.ParseWithClaims(token, &claims,
 		func(t *jwt.Token) (interface{}, error) {

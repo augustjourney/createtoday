@@ -2,15 +2,14 @@ package hero
 
 import (
 	"context"
-	"createtodayapi/internal/entity"
 )
 
-var emails []entity.Email
+var emails []Email
 
 type MemoryRepo struct{}
 
-func (r *MemoryRepo) FindByType(ctx context.Context, emailType string) (*entity.Email, error) {
-	var email entity.Email
+func (r *MemoryRepo) FindByType(ctx context.Context, emailType string) (*Email, error) {
+	var email Email
 	for _, e := range emails {
 		if e.Type == emailType {
 			email = e
@@ -20,10 +19,10 @@ func (r *MemoryRepo) FindByType(ctx context.Context, emailType string) (*entity.
 }
 
 func NewMemoryRepo() *MemoryRepo {
-	emails = append(emails, entity.Email{
+	emails = append(emails, Email{
 		Subject:  "Cсылка для входа в CreateToday",
 		Template: "default",
-		From: entity.EmailSender{
+		From: EmailSender{
 			Email: "hello@createtoday.ru",
 			Name:  "CreateToday",
 		},
@@ -52,10 +51,10 @@ func NewMemoryRepo() *MemoryRepo {
 		},
 	})
 
-	emails = append(emails, entity.Email{
+	emails = append(emails, Email{
 		Subject:  "Добро пожаловать в CreateToday",
 		Template: "default",
-		From: entity.EmailSender{
+		From: EmailSender{
 			Email: "hello@createtoday.ru",
 			Name:  "CreateToday",
 		},

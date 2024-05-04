@@ -5,7 +5,6 @@ import (
 	"context"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
-	"createtodayapi/internal/entity"
 	"createtodayapi/internal/logger"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -24,11 +23,11 @@ type EmailsService struct {
 }
 
 type IEmailsService interface {
-	GetEmailByType(context context.Context, emailType string) (*entity.Email, error)
-	SendEmail(email *entity.Email, to []string) error
+	GetEmailByType(context context.Context, emailType string) (*Email, error)
+	SendEmail(email *Email, to []string) error
 }
 
-func (s *EmailsService) GetEmailByType(context context.Context, emailType string) (*entity.Email, error) {
+func (s *EmailsService) GetEmailByType(context context.Context, emailType string) (*Email, error) {
 	email, err := s.repo.FindByType(context, emailType)
 	if err != nil {
 		logger.Log.Error(err.Error())
@@ -46,7 +45,7 @@ func (s *EmailsService) buildTemplatePath(templateName string) (string, error) {
 	return wd + pathToTemplates + templateName + templateExtension, nil
 }
 
-func (s *EmailsService) buildEmailHtml(email *entity.Email) (string, error) {
+func (s *EmailsService) buildEmailHtml(email *Email) (string, error) {
 
 	body, err := template.New("").Parse(email.Body)
 	if err != nil {
@@ -87,11 +86,11 @@ func (s *EmailsService) buildEmailHtml(email *entity.Email) (string, error) {
 	return tpl.String(), nil
 }
 
-func (s *EmailsService) buildEmailSenderName(sender entity.EmailSender) string {
+func (s *EmailsService) buildEmailSenderName(sender EmailSender) string {
 	return sender.Name + " " + "<" + sender.Email + ">"
 }
 
-func (s *EmailsService) SendEmail(email *entity.Email, to []string) error {
+func (s *EmailsService) SendEmail(email *Email, to []string) error {
 	htmlBody, err := s.buildEmailHtml(email)
 
 	if err != nil {
