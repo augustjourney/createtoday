@@ -1,17 +1,16 @@
-package middleware
+package hero
 
 import (
 	"context"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/logger"
-	"createtodayapi/internal/service"
 	"errors"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"strings"
 )
 
-func Auth(auth service.Auth) fiber.Handler {
+func AuthMiddleware(service IService) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		authHeader := ctx.Get("authorization")
 
@@ -28,7 +27,7 @@ func Auth(auth service.Auth) fiber.Handler {
 
 		token := authHeaderData[1]
 
-		user, err := auth.ValidateJWTToken(context.Background(), token)
+		user, err := service.ValidateJWTToken(context.Background(), token)
 
 		if err != nil {
 			if errors.Is(err, common.ErrTokenExpired) {

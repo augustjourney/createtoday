@@ -1,4 +1,4 @@
-package service
+package hero
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/entity"
 	"createtodayapi/internal/logger"
-	"createtodayapi/internal/storage"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -21,7 +20,12 @@ const templateExtension = ".html"
 
 type EmailsService struct {
 	config *config.Config
-	repo   storage.Emails
+	repo   *MemoryRepo
+}
+
+type IEmailsService interface {
+	GetEmailByType(context context.Context, emailType string) (*entity.Email, error)
+	SendEmail(email *entity.Email, to []string) error
 }
 
 func (s *EmailsService) GetEmailByType(context context.Context, emailType string) (*entity.Email, error) {
@@ -132,7 +136,7 @@ func (s *EmailsService) SendEmail(email *entity.Email, to []string) error {
 	return nil
 }
 
-func NewEmailService(config *config.Config, repo storage.Emails) *EmailsService {
+func NewEmailService(config *config.Config, repo *MemoryRepo) *EmailsService {
 	return &EmailsService{
 		config: config,
 		repo:   repo,

@@ -1,4 +1,4 @@
-package memory
+package hero
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 
 var emails []entity.Email
 
-type EmailsRepo struct{}
+type MemoryRepo struct{}
 
-func (r *EmailsRepo) FindByType(ctx context.Context, emailType string) (*entity.Email, error) {
+func (r *MemoryRepo) FindByType(ctx context.Context, emailType string) (*entity.Email, error) {
 	var email entity.Email
 	for _, e := range emails {
 		if e.Type == emailType {
@@ -19,7 +19,7 @@ func (r *EmailsRepo) FindByType(ctx context.Context, emailType string) (*entity.
 	return &email, nil
 }
 
-func NewEmailsRepo() *EmailsRepo {
+func NewMemoryRepo() *MemoryRepo {
 	emails = append(emails, entity.Email{
 		Subject:  "Cсылка для входа в CreateToday",
 		Template: "default",
@@ -89,5 +89,5 @@ func NewEmailsRepo() *EmailsRepo {
 			</p>
 		`,
 	})
-	return &EmailsRepo{}
+	return &MemoryRepo{}
 }

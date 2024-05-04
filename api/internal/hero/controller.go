@@ -1,24 +1,37 @@
-package controller
+package hero
 
 import (
 	"context"
 	"createtodayapi/internal/common"
-	"createtodayapi/internal/dto"
+	"createtodayapi/internal/entity"
 	"createtodayapi/internal/logger"
-	"createtodayapi/internal/service"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 )
 
-type AuthController struct {
-	service service.Auth
+type IController interface {
+	// Auth
+	Login(ctx *fiber.Ctx) error
+	Signup(ctx *fiber.Ctx) error
+	GetMagicLink(ctx *fiber.Ctx) error
+	ValidateMagicLink(ctx *fiber.Ctx) error
+
+	// Products
+	GetUserAccessibleProducts(ctx *fiber.Ctx) error
+
+	// Profile
+	GetProfile(ctx *fiber.Ctx) error
 }
 
-func (c *AuthController) Login(ctx *fiber.Ctx) error {
+type Controller struct {
+	service IService
+}
+
+func (c *Controller) Login(ctx *fiber.Ctx) error {
 	ctx.Set("Content-Type", "application/json")
-	var body dto.LoginBody
+	var body LoginBody
 
 	err := json.Unmarshal(ctx.Body(), &body)
 
@@ -53,8 +66,8 @@ func (c *AuthController) Login(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, result, nil)
 }
 
-func (c *AuthController) Signup(ctx *fiber.Ctx) error {
-	var body dto.SignupBody
+func (c *Controller) Signup(ctx *fiber.Ctx) error {
+	var body SignupBody
 
 	err := json.Unmarshal(ctx.Body(), &body)
 	if err != nil {
@@ -84,8 +97,8 @@ func (c *AuthController) Signup(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, result, nil)
 }
 
-func (c *AuthController) GetMagicLink(ctx *fiber.Ctx) error {
-	var body dto.GetMagicLinkBody
+func (c *Controller) GetMagicLink(ctx *fiber.Ctx) error {
+	var body GetMagicLinkBody
 	err := json.Unmarshal(ctx.Body(), &body)
 	if err != nil {
 		logger.Log.Error(err.Error())
@@ -112,8 +125,8 @@ func (c *AuthController) GetMagicLink(ctx *fiber.Ctx) error {
 	}, nil)
 }
 
-func (c *AuthController) ValidateMagicLink(ctx *fiber.Ctx) error {
-	var body dto.ValidateMagicLinkBody
+func (c *Controller) ValidateMagicLink(ctx *fiber.Ctx) error {
+	var body ValidateMagicLinkBody
 	err := json.Unmarshal(ctx.Body(), &body)
 	if err != nil {
 		logger.Log.Error(err.Error())
@@ -144,8 +157,32 @@ func (c *AuthController) ValidateMagicLink(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, result, nil)
 }
 
-func NewAuthController(service service.Auth) *AuthController {
-	return &AuthController{
+func (c *Controller) GetProfile(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*entity.User)
+	profile, err := c.service.GetProfile(context.Background(), user.ID)
+
+	if err != nil {
+		return common.DoApiResponse(ctx, 500, nil, err)
+	}
+
+	if profile == nil {
+		return common.DoApiResponse(ctx, 404, nil, common.ErrUserNotFound)
+	}
+
+	return common.DoApiResponse(ctx, 200, profile, nil)
+}
+
+func (c *Controller) GetUserAccessibleProducts(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*entity.User)
+	products, err := c.service.GetUserAccessibleProducts(context.Background(), user.ID)
+	if err != nil {
+		return common.DoApiResponse(ctx, 500, nil, err)
+	}
+	return common.DoApiResponse(ctx, 200, products, nil)
+}
+
+func NewController(service IService) *Controller {
+	return &Controller{
 		service: service,
 	}
 }

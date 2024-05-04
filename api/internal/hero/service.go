@@ -1,34 +1,64 @@
-package service
+package hero
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"time"
-
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
-	"createtodayapi/internal/dto"
 	"createtodayapi/internal/entity"
 	"createtodayapi/internal/logger"
-	"createtodayapi/internal/storage"
-
+	"errors"
+	"fmt"
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
+	"time"
 )
+
+type IService interface {
+	Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error)
+	Login(ctx context.Context, body *LoginBody) (*LoginResult, error)
+	GetMagicLink(ctx context.Context, to string) error
+	ValidateMagicLink(ctx context.Context, token string) (*LoginResult, error)
+	ValidateJWTToken(ctx context.Context, token string) (*entity.User, error)
+
+	GetProfile(ctx context.Context, userId int) (*entity.Profile, error)
+
+	GetUserAccessibleProducts(ctx context.Context, userId int) ([]entity.UserProductCard, error)
+}
 
 type Claims struct {
 	jwt.RegisteredClaims
 	UserID int `json:"user_id"`
 }
 
-type AuthService struct {
+type Service struct {
+	repo   Storage
 	config *config.Config
-	repo   storage.Users
-	emails *EmailsService
+	emails IEmailsService
 }
 
-func (s *AuthService) Signup(ctx context.Context, body *dto.SignupBody) (*dto.SignUpResult, error) {
+func (s *Service) GetProfile(ctx context.Context, userId int) (*entity.Profile, error) {
+	profile, err := s.repo.GetProfileByUserId(ctx, userId)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return nil, common.ErrInternalError
+	}
+
+	return profile, nil
+}
+
+func (s *Service) GetUserAccessibleProducts(ctx context.Context, userId int) ([]entity.UserProductCard, error) {
+	products, err := s.repo.GetUserAccessibleProducts(ctx, userId)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return nil, common.ErrInternalError
+	}
+
+	return products, nil
+}
+
+func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 
@@ -42,7 +72,7 @@ func (s *AuthService) Signup(ctx context.Context, body *dto.SignupBody) (*dto.Si
 		FirstName: body.FirstName,
 	}
 
-	result := dto.SignUpResult{}
+	result := SignUpResult{}
 
 	err = s.repo.CreateUser(ctx, user)
 
@@ -59,7 +89,7 @@ func (s *AuthService) Signup(ctx context.Context, body *dto.SignupBody) (*dto.Si
 	}
 
 	// Находим только что созданного пользователя или уже существующего
-	foundUser, err := s.repo.FindByEmail(ctx, body.Email)
+	foundUser, err := s.repo.FindUserByEmail(ctx, body.Email)
 
 	if err != nil {
 		logger.Log.Error(err.Error(), "error", err)
@@ -112,9 +142,9 @@ func (s *AuthService) Signup(ctx context.Context, body *dto.SignupBody) (*dto.Si
 
 }
 
-func (s *AuthService) Login(ctx context.Context, body *dto.LoginBody) (*dto.LoginResult, error) {
+func (s *Service) Login(ctx context.Context, body *LoginBody) (*LoginResult, error) {
 
-	user, err := s.repo.FindByEmail(ctx, body.Email)
+	user, err := s.repo.FindUserByEmail(ctx, body.Email)
 
 	if err != nil {
 		if errors.Is(err, common.ErrUserNotFound) {
@@ -133,7 +163,7 @@ func (s *AuthService) Login(ctx context.Context, body *dto.LoginBody) (*dto.Logi
 	if err != nil {
 		return nil, common.ErrInternalError
 	}
-	result := dto.LoginResult{
+	result := LoginResult{
 		Token: token,
 	}
 
@@ -141,8 +171,8 @@ func (s *AuthService) Login(ctx context.Context, body *dto.LoginBody) (*dto.Logi
 
 }
 
-func (s *AuthService) GetMagicLink(ctx context.Context, to string) error {
-	user, err := s.repo.FindByEmail(ctx, to)
+func (s *Service) GetMagicLink(ctx context.Context, to string) error {
+	user, err := s.repo.FindUserByEmail(ctx, to)
 	if err != nil {
 		logger.Log.Error(err.Error(), "error", err)
 		return common.ErrInternalError
@@ -180,7 +210,7 @@ func (s *AuthService) GetMagicLink(ctx context.Context, to string) error {
 	return nil
 }
 
-func (s *AuthService) ValidateMagicLink(ctx context.Context, token string) (*dto.LoginResult, error) {
+func (s *Service) ValidateMagicLink(ctx context.Context, token string) (*LoginResult, error) {
 	user, err := s.ValidateJWTToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, common.ErrTokenExpired) {
@@ -198,7 +228,7 @@ func (s *AuthService) ValidateMagicLink(ctx context.Context, token string) (*dto
 		return nil, common.ErrInternalError
 	}
 
-	result := dto.LoginResult{
+	result := LoginResult{
 		Token: jwtToken,
 	}
 
@@ -206,7 +236,7 @@ func (s *AuthService) ValidateMagicLink(ctx context.Context, token string) (*dto
 
 }
 
-func (s *AuthService) createMagicLink(userId int) (string, error) {
+func (s *Service) createMagicLink(userId int) (string, error) {
 
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -228,7 +258,7 @@ func (s *AuthService) createMagicLink(userId int) (string, error) {
 	return magicLink, nil
 }
 
-func (s *AuthService) createJWTToken(userId int) (string, error) {
+func (s *Service) createJWTToken(userId int) (string, error) {
 
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -248,7 +278,7 @@ func (s *AuthService) createJWTToken(userId int) (string, error) {
 	return tokenString, nil
 }
 
-func (s *AuthService) ValidateJWTToken(ctx context.Context, token string) (*entity.User, error) {
+func (s *Service) ValidateJWTToken(ctx context.Context, token string) (*entity.User, error) {
 	claims := Claims{}
 	data, err := jwt.ParseWithClaims(token, &claims,
 		func(t *jwt.Token) (interface{}, error) {
@@ -275,7 +305,7 @@ func (s *AuthService) ValidateJWTToken(ctx context.Context, token string) (*enti
 		return nil, common.ErrInvalidToken
 	}
 
-	user, err := s.repo.FindById(ctx, claims.UserID)
+	user, err := s.repo.FindUserById(ctx, claims.UserID)
 
 	if err != nil {
 		return nil, err
@@ -284,15 +314,15 @@ func (s *AuthService) ValidateJWTToken(ctx context.Context, token string) (*enti
 	return user, nil
 }
 
-func (s *AuthService) passwordMatches(hash string, password string) bool {
+func (s *Service) passwordMatches(hash string, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-func NewAuthService(repo storage.Users, config *config.Config, emailService *EmailsService) *AuthService {
-	return &AuthService{
+func NewService(repo Storage, config *config.Config, emails IEmailsService) *Service {
+	return &Service{
 		repo:   repo,
 		config: config,
-		emails: emailService,
+		emails: emails,
 	}
 }

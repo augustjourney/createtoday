@@ -1,4 +1,4 @@
-package dto
+package hero
 
 import (
 	"createtodayapi/internal/common"
