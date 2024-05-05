@@ -53,19 +53,33 @@ func (r *PostgresRepo) FindUserById(ctx context.Context, id int) (*User, error) 
 
 func (r *PostgresRepo) GetProfileByUserId(ctx context.Context, userId int) (*Profile, error) {
 	q := fmt.Sprintf(`
-		select email, first_name, last_name, phone, avatar, telegram, instagram 
+		select email, first_name, last_name, phone, avatar, telegram, instagram, about 
 		from %s where id = $1`,
 		UsersTable,
 	)
 	var profile Profile
 	err := r.db.GetContext(ctx, &profile, q, userId)
 	if err != nil {
-		if errors.As(err, &pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, common.ErrUserNotFound
 		}
 		return nil, err
 	}
 	return &profile, nil
+}
+
+func (r *PostgresRepo) UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error {
+	q := fmt.Sprintf(`
+		update %s 
+		set first_name = $2, last_name = $3, phone = $4, telegram = $5, instagram = $6, about = $7
+		where id = $1`,
+		UsersTable,
+	)
+	_, err := r.db.ExecContext(ctx, q, userId, profile.FirstName, profile.LastName, profile.Phone, profile.Telegram, profile.Instagram, profile.About)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *PostgresRepo) CreateUser(ctx context.Context, user User) error {

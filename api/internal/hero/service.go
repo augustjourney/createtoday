@@ -20,6 +20,7 @@ type IService interface {
 	ValidateJWTToken(ctx context.Context, token string) (*User, error)
 
 	GetProfile(ctx context.Context, userId int) (*Profile, error)
+	UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error
 
 	GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error)
 	GetUserAccessibleProduct(ctx context.Context, courseSlug string, userId int) (*ProductInfo, error)
@@ -47,6 +48,17 @@ func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) 
 	}
 
 	return profile, nil
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error {
+	err := s.repo.UpdateProfile(ctx, userId, profile)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	return nil
 }
 
 func (s *Service) GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error) {

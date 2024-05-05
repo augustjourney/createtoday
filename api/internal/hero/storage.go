@@ -12,6 +12,7 @@ type Storage interface {
 
 	// profile
 	GetProfileByUserId(ctx context.Context, userId int) (*Profile, error)
+	UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error
 
 	// products
 	GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error)

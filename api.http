@@ -50,7 +50,31 @@ GET http://localhost:8080/hero/profile
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
+### Update Profile
+POST http://localhost:8080/hero/profile
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+    "first_name": "Elliot",
+    "last_name": "Alderson",
+    "instagram": null,
+    "telegram": null,
+    "phone": null,
+    "about": "do coding and stuff"
+}
+
 ### Courses
 GET http://localhost:8080/hero/courses
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Course
+GET http://localhost:8080/hero/courses/c4899099-ab20-47c5-a63a-dd169c7f41b5/lessons
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Lesson
+GET http://localhost:8080/hero/courses/c4899099-ab20-47c5-a63a-dd169c7f41b5/lessons/360e9d9c-e3c5-448d-bf78-4ed7558b5575
 Accept: application/json
 Authorization: Bearer {{auth_token}}

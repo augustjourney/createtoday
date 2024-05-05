@@ -69,3 +69,12 @@ type SignUpResult struct {
 	Token         *string `json:"token"`
 	Message       string  `json:"message,omitempty"`
 }
+
+type UpdateProfileBody struct {
+	FirstName string  `json:"first_name"`
+	LastName  *string `json:"last_name"`
+	Telegram  *string `json:"telegram"`
+	Instagram *string `json:"instagram"`
+	About     *string `json:"about"`
+	Phone     *string `json:"phone"`
+}

@@ -26,6 +26,7 @@ type Profile struct {
 	Avatar    *string `json:"avatar" db:"avatar"`
 	Telegram  *string `json:"telegram" db:"telegram"`
 	Instagram *string `json:"instagram" db:"instagram"`
+	About     *string `json:"about" db:"about"`
 }
 
 type User struct {

@@ -171,6 +171,33 @@ func (c *Controller) GetProfile(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, 200, profile, nil)
 }
 
+func (c *Controller) UpdateProfile(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+	var body UpdateProfileBody
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, 400, nil, err)
+	}
+
+	// TODO: валидация body
+	// Все поля из структуры должны быть в json-body
+	// Например: если в json-body нет полей,
+	// Которые должны быть в структуре
+	// А в БД эти поля заполнены
+	// Получается перезатрем их на null
+	// При этом если поле есть в json-body со значением null
+	// Это корректно
+
+	err = c.service.UpdateProfile(context.Background(), user.ID, body)
+
+	if err != nil {
+		return common.DoApiResponse(ctx, 500, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, 200, "Профиль обновлен", nil)
+}
+
 func (c *Controller) GetUserAccessibleProducts(ctx *fiber.Ctx) error {
 	user := ctx.Locals("user").(*User)
 	products, err := c.service.GetUserAccessibleProducts(context.Background(), user.ID)
