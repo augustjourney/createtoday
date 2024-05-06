@@ -1,0 +1,80 @@
+### Login
+POST http://localhost:8080/hero/auth/login
+Accept: application/json
+
+{
+  "email": "{{email}}",
+  "password":"{{password}}"
+}
+
+> {%
+    client.global.set("auth_token", response.body.result.token)
+%}
+
+### Get Magic Link
+POST http://localhost:8080/hero/auth/login/get-magic-link
+Accept: application/json
+
+{
+  "email": "{{email}}"
+}
+
+### Validate Magic Link
+POST http://localhost:8080/hero/auth/login/validate-magic-link
+Accept: application/json
+
+{
+  "token": "{{magic-link-token}}"
+}
+> {%
+    client.global.set("auth_token", response.body.result.token)
+%}
+
+### Singup
+POST http://localhost:8080/hero/auth/signup
+Accept: application/json
+
+{
+  "email": "some-working-email@example.com",
+  "password":"some-new-password",
+  "first_name": "Your name"
+}
+
+> {%
+    client.global.set("auth_token", response.body.result.token)
+%}
+
+
+### Profile
+GET http://localhost:8080/hero/profile
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Update Profile
+POST http://localhost:8080/hero/profile
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+    "first_name": "Elliot",
+    "last_name": "Alderson",
+    "instagram": null,
+    "telegram": null,
+    "phone": null,
+    "about": "do coding and stuff"
+}
+
+### Courses
+GET http://localhost:8080/hero/courses
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Course
+GET http://localhost:8080/hero/courses/c4899099-ab20-47c5-a63a-dd169c7f41b5/lessons
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Lesson
+GET http://localhost:8080/hero/courses/c4899099-ab20-47c5-a63a-dd169c7f41b5/lessons/360e9d9c-e3c5-448d-bf78-4ed7558b5575
+Accept: application/json
+Authorization: Bearer {{auth_token}}
