@@ -27,3 +27,6 @@ var ErrProductNotFound = errors.New("Такой курс не найден ил�
 
 // lessons
 var ErrLessonNotFound = errors.New("Такой урок не найден или у вас нет к нему доступа")
+
+// avatar
+var ErrEmptyAvatar = errors.New("Аватар не может быть пустым")

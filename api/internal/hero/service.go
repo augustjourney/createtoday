@@ -7,8 +7,10 @@ import (
 	"createtodayapi/internal/logger"
 	"errors"
 	"fmt"
+	"github.com/disintegration/imaging"
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
+	"os"
 	"time"
 )
 
@@ -26,6 +28,8 @@ type IService interface {
 	GetUserAccessibleProduct(ctx context.Context, courseSlug string, userId int) (*ProductInfo, error)
 
 	GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error)
+
+	ChangeAvatar(ctx context.Context, userId int, avatarPath string, avatarFileName string) error
 }
 
 type Claims struct {
@@ -53,6 +57,69 @@ func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) 
 func (s *Service) UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error {
 	err := s.repo.UpdateProfile(ctx, userId, profile)
 
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) ChangeAvatar(ctx context.Context, userId int, avatarPathToDir string, avatarFileName string) error {
+	defer func() {
+		err := RemoveLocalFile(avatarPathToDir + "/" + avatarFileName)
+		if err != nil {
+			logger.Log.Error(err.Error(), "error", err)
+		}
+	}()
+
+	src, err := imaging.Open(avatarPathToDir + "/" + avatarFileName)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	ext := GetExtensionFromFileName(avatarFileName)
+	if ext == "" {
+		return common.ErrInternalError
+	}
+
+	fileName := fmt.Sprintf("avatar_for_user_%d", userId)
+	newAvatarFileName := MakeFileHashName(fileName, ext)
+
+	// get size of image
+	// size := src.Bounds().Size()
+	// TODO: что если изображение уже меньше или равно 300
+
+	src = imaging.Resize(src, 300, 0, imaging.Lanczos)
+
+	err = imaging.Save(src, avatarPathToDir+"/"+newAvatarFileName)
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	defer func() {
+		err := RemoveLocalFile(avatarPathToDir + "/" + newAvatarFileName)
+		if err != nil {
+			logger.Log.Error(err.Error(), "error", err)
+		}
+	}()
+
+	file, err := os.Open(avatarPathToDir + "/" + newAvatarFileName)
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	fileUrl, err := UploadFileToS3(s.config.PhotosBucket, newAvatarFileName, file, s.config)
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	err = s.repo.UpdateAvatar(ctx, userId, fileUrl)
 	if err != nil {
 		logger.Log.Error(err.Error(), "error", err)
 		return common.ErrInternalError

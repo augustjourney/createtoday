@@ -200,6 +200,46 @@ func (c *Controller) UpdateProfile(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, http.StatusOK, "Профиль обновлен", nil)
 }
 
+func (c *Controller) ChangeAvatar(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	file := form.File["avatar"][0]
+
+	if file == nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, common.ErrEmptyAvatar)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+	}
+
+	avatarFileName := fmt.Sprintf("avatar_%d_%s", user.ID, file.Filename)
+	avatarPathToDir := fmt.Sprintf("%s/temp", wd)
+
+	err = ctx.SaveFile(file, avatarPathToDir+"/"+avatarFileName)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	err = c.service.ChangeAvatar(context.Background(), user.ID, avatarPathToDir, avatarFileName)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Аватар успешно загружен", nil)
+
+}
+
 func (c *Controller) GetUserAccessibleProducts(ctx *fiber.Ctx) error {
 	user := ctx.Locals("user").(*User)
 	products, err := c.service.GetUserAccessibleProducts(context.Background(), user.ID)

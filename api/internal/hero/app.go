@@ -24,6 +24,7 @@ func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
 	hero.Post("/auth/signup", controller.Signup)
 	hero.Get("/profile", AuthMiddleware(service), controller.GetProfile)
 	hero.Post("/profile", AuthMiddleware(service), controller.UpdateProfile)
+	hero.Post("/profile/avatar", AuthMiddleware(service), controller.ChangeAvatar)
 	hero.Get("/courses", AuthMiddleware(service), controller.GetUserAccessibleProducts)
 	hero.Get("/courses/:slug/lessons", AuthMiddleware(service), controller.GetUserAccessibleProduct)
 	hero.Get("/courses/:courseSlug/lessons/:slug", AuthMiddleware(service), controller.GetUserAccessibleLesson)
