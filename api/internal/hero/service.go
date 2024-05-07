@@ -1,6 +1,7 @@
 package hero
 
 import (
+	"bytes"
 	"context"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
@@ -10,7 +11,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
-	"os"
+	"image/jpeg"
 	"time"
 )
 
@@ -80,40 +81,24 @@ func (s *Service) ChangeAvatar(ctx context.Context, userId int, avatarPathToDir 
 		return common.ErrInternalError
 	}
 
-	ext := GetExtensionFromFileName(avatarFileName)
-	if ext == "" {
-		return common.ErrInternalError
-	}
-
 	fileName := fmt.Sprintf("avatar_for_user_%d", userId)
-	newAvatarFileName := MakeFileHashName(fileName, ext)
+	newAvatarFileName := MakeFileHashName(fileName, "jpeg")
 
-	// get size of image
-	// size := src.Bounds().Size()
-	// TODO: что если изображение уже меньше или равно 300
+	buff := new(bytes.Buffer)
 
-	src = imaging.Resize(src, 300, 0, imaging.Lanczos)
+	size := src.Bounds().Size()
 
-	err = imaging.Save(src, avatarPathToDir+"/"+newAvatarFileName)
+	if size.X > 300 {
+		src = imaging.Resize(src, 300, 0, imaging.Lanczos)
+	}
+
+	err = jpeg.Encode(buff, src, nil)
 	if err != nil {
-		logger.Log.Error(err.Error(), "error", err)
+		logger.Log.Error(err.Error())
 		return common.ErrInternalError
 	}
 
-	defer func() {
-		err := RemoveLocalFile(avatarPathToDir + "/" + newAvatarFileName)
-		if err != nil {
-			logger.Log.Error(err.Error(), "error", err)
-		}
-	}()
-
-	file, err := os.Open(avatarPathToDir + "/" + newAvatarFileName)
-	if err != nil {
-		logger.Log.Error(err.Error(), "error", err)
-		return common.ErrInternalError
-	}
-
-	fileUrl, err := UploadFileToS3(s.config.PhotosBucket, newAvatarFileName, file, s.config)
+	fileUrl, err := UploadFileToS3(s.config.PhotosBucket, newAvatarFileName, bytes.NewReader(buff.Bytes()), s.config)
 	if err != nil {
 		logger.Log.Error(err.Error(), "error", err)
 		return common.ErrInternalError

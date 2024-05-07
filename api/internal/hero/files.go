@@ -9,11 +9,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"io"
 	"os"
 	"strings"
 )
 
-func UploadFileToS3(bucket string, fileName string, fileBytes *os.File, config *config.Config) (string, error) {
+func UploadFileToS3(bucket string, fileName string, fileBytes io.ReadSeeker, config *config.Config) (string, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region:           aws.String(config.S3Region),
 		Endpoint:         aws.String(config.S3Endpoint),
