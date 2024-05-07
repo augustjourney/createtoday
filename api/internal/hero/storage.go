@@ -14,6 +14,7 @@ type Storage interface {
 	GetProfileByUserId(ctx context.Context, userId int) (*Profile, error)
 	UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error
 	UpdateAvatar(ctx context.Context, userId int, avatar string) error
+	UpdatePassword(ctx context.Context, userId int, password string) error
 
 	// products
 	GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error)

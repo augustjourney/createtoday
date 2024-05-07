@@ -95,6 +95,19 @@ func (r *PostgresRepo) UpdateAvatar(ctx context.Context, userId int, avatar stri
 	return nil
 }
 
+func (r *PostgresRepo) UpdatePassword(ctx context.Context, userId int, password string) error {
+	q := fmt.Sprintf(`
+		update %s set password = $2
+		where id = $1`,
+		UsersTable,
+	)
+	_, err := r.db.ExecContext(ctx, q, userId, password)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *PostgresRepo) CreateUser(ctx context.Context, user User) error {
 	q := fmt.Sprintf(`
 		insert into %s (email, password, first_name)

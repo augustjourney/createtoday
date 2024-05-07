@@ -24,6 +24,7 @@ type IController interface {
 
 	// Profile
 	GetProfile(ctx *fiber.Ctx) error
+	UpdatePassword(ctx *fiber.Ctx) error
 }
 
 type Controller struct {
@@ -238,6 +239,29 @@ func (c *Controller) ChangeAvatar(ctx *fiber.Ctx) error {
 
 	return common.DoApiResponse(ctx, http.StatusOK, "Аватар успешно загружен", nil)
 
+}
+
+func (c *Controller) UpdatePassword(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+	var body UpdatePasswordBody
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	err = body.Validate()
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	err = c.service.ChangePassword(context.Background(), user.ID, body.Password)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Новый пароль успешно сохранен", nil)
 }
 
 func (c *Controller) GetUserAccessibleProducts(ctx *fiber.Ctx) error {

@@ -78,3 +78,19 @@ type UpdateProfileBody struct {
 	About     *string `json:"about"`
 	Phone     *string `json:"phone"`
 }
+
+type UpdatePasswordBody struct {
+	Password string `json:"password"`
+}
+
+func (b *UpdatePasswordBody) Validate() error {
+	if b.Password == "" {
+		return common.ErrNewPasswordIsEmpty
+	}
+
+	if len(b.Password) < 8 {
+		return common.ErrNewPasswordIsShort
+	}
+
+	return nil
+}

@@ -64,6 +64,15 @@ Authorization: Bearer {{auth_token}}
     "about": "do coding and stuff"
 }
 
+### Update Password
+POST http://localhost:8080/hero/profile/password
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "password":"12345678"
+}
+
 ### Courses
 GET http://localhost:8080/hero/courses
 Accept: application/json

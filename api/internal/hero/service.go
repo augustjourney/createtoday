@@ -31,6 +31,7 @@ type IService interface {
 	GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error)
 
 	ChangeAvatar(ctx context.Context, userId int, avatarPath string, avatarFileName string) error
+	ChangePassword(ctx context.Context, userId int, password string) error
 }
 
 type Claims struct {
@@ -107,6 +108,22 @@ func (s *Service) ChangeAvatar(ctx context.Context, userId int, avatarPathToDir 
 	err = s.repo.UpdateAvatar(ctx, userId, fileUrl)
 	if err != nil {
 		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) ChangePassword(ctx context.Context, userId int, password string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	err = s.repo.UpdatePassword(ctx, userId, string(hashedPassword))
+	if err != nil {
+		logger.Log.Error(err.Error())
 		return common.ErrInternalError
 	}
 

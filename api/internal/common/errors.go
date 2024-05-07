@@ -30,3 +30,7 @@ var ErrLessonNotFound = errors.New("Такой урок не найден или
 
 // avatar
 var ErrEmptyAvatar = errors.New("Аватар не может быть пустым")
+
+// profile
+var ErrNewPasswordIsEmpty = errors.New("Новый пароль не может быть пустым")
+var ErrNewPasswordIsShort = errors.New("Новый пароль не может быть меньше 8 символов")
