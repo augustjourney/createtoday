@@ -227,3 +227,43 @@ type MediaInfo struct {
 	Url     string        `json:"url" db:"url"`
 	Sources []MediaSource `json:"sources" db:"sources"`
 }
+
+type QuizSolved struct {
+	ID         int             `json:"id" db:"id"`
+	UserID     int             `json:"user_id" db:"user_id"`
+	QuizID     int             `json:"quiz_id" db:"quiz_id"`
+	ProductID  int             `json:"product_id" db:"product_id"`
+	LessonID   int             `json:"lesson_id" db:"lesson_id"`
+	ProjectID  int             `json:"project_id" db:"project_id"`
+	UserAnswer json.RawMessage `json:"user_answer" db:"user_answer"`
+	Type       string          `json:"type" db:"type"`
+	Starred    bool            `json:"starred" db:"starred"`
+	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at" db:"updated_at"`
+}
+
+type QuizSolvedInfo struct {
+	ID         int             `json:"id" db:"id"`
+	UserAnswer json.RawMessage `json:"user_answer" db:"user_answer"`
+	Type       string          `json:"type" db:"type"`
+	Starred    bool            `json:"starred" db:"starred"`
+	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
+	Media      json.RawMessage `json:"media" db:"media"`
+	Lesson     json.RawMessage `json:"lesson" db:"lesson"`
+	Author     json.RawMessage `json:"author" db:"author"`
+}
+
+type QuizSolvedAuthor struct {
+	FirstName string `json:"first_name" db:"first_name"`
+	LastName  string `json:"last_name" db:"last_name"`
+	Avatar    string `json:"avatar" db:"avatar"`
+}
+
+type QuizSolvedLesson struct {
+	Name    string `json:"name" db:"name"`
+	Slug    string `json:"slug" db:"slug"`
+	Product struct {
+		Name string `json:"name" db:"name"`
+		Slug string `json:"slug" db:"slug"`
+	} `json:"product" db:"product"`
+}

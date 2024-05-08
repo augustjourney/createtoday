@@ -87,3 +87,8 @@ Authorization: Bearer {{auth_token}}
 GET http://localhost:8080/hero/courses/c4899099-ab20-47c5-a63a-dd169c7f41b5/lessons/360e9d9c-e3c5-448d-bf78-4ed7558b5575
 Accept: application/json
 Authorization: Bearer {{auth_token}}
+
+### Lesson Solved Quizzes
+GET http://localhost:8080/hero/quizzes/081bbbda-e9e5-45fe-b85d-d8d76d8c9e79/solved
+Accept: application/json
+Authorization: Bearer {{auth_token}}

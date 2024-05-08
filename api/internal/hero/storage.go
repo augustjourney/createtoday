@@ -23,4 +23,7 @@ type Storage interface {
 
 	// lessons
 	GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error)
+
+	// quizzes
+	GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug string) ([]QuizSolvedInfo, error)
 }

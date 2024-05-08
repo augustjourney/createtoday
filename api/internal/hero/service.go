@@ -32,6 +32,8 @@ type IService interface {
 
 	ChangeAvatar(ctx context.Context, userId int, avatarPath string, avatarFileName string) error
 	ChangePassword(ctx context.Context, userId int, password string) error
+
+	GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string) ([]QuizSolvedInfo, error)
 }
 
 type Claims struct {
@@ -186,6 +188,15 @@ func (s *Service) GetUserAccessibleLesson(ctx context.Context, lessonSlug string
 	}
 
 	return lesson, nil
+}
+
+func (s *Service) GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string) ([]QuizSolvedInfo, error) {
+	solvedQuizzes, err := s.repo.GetSolvedQuizzesForQuiz(ctx, lessonSlug)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return solvedQuizzes, common.ErrInternalError
+	}
+	return solvedQuizzes, nil
 }
 
 func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {

@@ -299,6 +299,17 @@ func (c *Controller) GetUserAccessibleLesson(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, http.StatusOK, lesson, nil)
 }
 
+func (c *Controller) GetSolvedQuizzesForQuiz(ctx *fiber.Ctx) error {
+	slug := ctx.Params("slug")
+
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForQuiz(context.Background(), slug)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
+}
+
 func NewController(service IService) *Controller {
 	return &Controller{
 		service: service,
