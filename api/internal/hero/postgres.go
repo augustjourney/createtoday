@@ -20,6 +20,9 @@ const UserGroupsTable = "public.user_group"
 const ProductGroupsTable = "public.product_group"
 const UsersProductsView = "public._userproducts"
 const LessonsTable = "public.lesson"
+const QuizzesTable = "public.quiz"
+const MediaTable = "public.media"
+const RelatedMediaTable = "public.related_media"
 
 type PostgresRepo struct {
 	db *sqlx.DB
@@ -185,21 +188,61 @@ func (r *PostgresRepo) GetProductLessons(ctx context.Context, productId int) ([]
 func (r *PostgresRepo) GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error) {
 	q := fmt.Sprintf(`
 		select l.name, l.slug, l.description, l.content, l.can_complete,
-		l.settings, l.is_public, json_build_object(
+		l.settings, l.is_public, 
+		json_build_object(
 		    'name', p.name,
 		    'slug', p.slug,
 		    'cover', p.cover,
 		    'settings', p.settings
-		) as product
+		) as product, 
+		coalesce(lq.quizzes, '{}'::json) as quizzes,
+		coalesce(lm.media, '{}'::json) as media
+		
 		from %s as l
 		join %s as p on p.id = l.product_id and p.user_id = $2
+		
+		-- quizzes
+		left join lateral (
+		    select 
+		    	json_object_agg(
+		    		q.id,
+		    		json_build_object(
+		    			'slug', q.slug,
+		    			'type', q.type,
+		    			'content', q.content,
+		    			'settings', q.settings,
+		    			'show_others_answers', q.show_others_answers
+		    		)
+		    	) as quizzes
+		    from %s as q
+		    where q.lesson_id = l.id
+		) as lq on true
+		
+		-- media
+		left join lateral (
+		    select 
+		    	json_object_agg(
+		    		rm.media_id,
+		    		json_build_object(
+		    			'url', m.url,
+		    			'sources', m.sources,
+		    			'type', m.type
+		    		)
+		    	) as media
+		    from %s as rm
+		    join %s as m on m.id = rm.media_id
+		    where rm.related_type = 'lesson' and rm.related_id = l.id
+		) as lm on true
+		             
 		where l.slug = $1 and l.is_published = true
-	`, LessonsTable, UsersProductsView)
+	`, LessonsTable, UsersProductsView, QuizzesTable, RelatedMediaTable, MediaTable)
+
 	var lesson LessonInfo
+
 	err := r.db.GetContext(ctx, &lesson, q, lessonSlug, userId)
+
 	if err != nil {
-		fmt.Println(err.Error())
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.As(err, &pgx.ErrNoRows) {
 			return nil, common.ErrLessonNotFound
 		}
 		return nil, err
