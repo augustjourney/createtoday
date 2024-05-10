@@ -7,9 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gofiber/fiber/v2"
 	"net/http"
 	"os"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type IController interface {
@@ -25,6 +26,9 @@ type IController interface {
 	// Profile
 	GetProfile(ctx *fiber.Ctx) error
 	UpdatePassword(ctx *fiber.Ctx) error
+
+	// Quizzes
+	SolveQuiz(ctx *fiber.Ctx) error
 }
 
 type Controller struct {
@@ -308,6 +312,91 @@ func (c *Controller) GetSolvedQuizzesForQuiz(ctx *fiber.Ctx) error {
 	}
 
 	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
+}
+
+func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
+	var body SolveQuizBody
+
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	body.Type = form.Value["type"][0]
+	body.Answer = form.Value["answer"][0]
+
+	media := form.File["media"]
+
+	defer func() {
+		if len(body.Media) == 0 {
+			return
+		}
+
+		for _, m := range body.Media {
+			_ = RemoveLocalFile(m.Path)
+		}
+	}()
+
+	if media != nil {
+		wd, err := os.Getwd()
+		if err != nil {
+			logger.Log.Error(err.Error())
+			return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+		}
+
+		for _, file := range media {
+			filePath := fmt.Sprintf("%s/temp/%s", wd, file.Filename)
+
+			err = ctx.SaveFile(file, filePath)
+			if err != nil {
+				logger.Log.Error(err.Error())
+				return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+			}
+
+			body.Media = append(body.Media, FileUpload{
+				FileName: file.Filename,
+				Size:     file.Size,
+				Path:     filePath,
+				Mime:     file.Header.Get("Content-Type"),
+			})
+		}
+	}
+
+	err = body.Validate()
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+	slug := ctx.Params("slug")
+
+	err = c.service.SolveQuiz(context.Background(), SolveQuizDTO{
+		Answer:   body.Answer,
+		UserID:   user.ID,
+		Type:     body.Type,
+		QuizSlug: slug,
+		Media:    body.Media,
+	})
+
+	if errors.Is(err, common.ErrQuizAlreadySolved) {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	defer func() {
+		for _, file := range body.Media {
+			err := RemoveLocalFile(file.Path)
+			if err != nil {
+				logger.Log.Error(err.Error())
+			}
+		}
+	}()
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Задание успешно выполнено", nil)
 }
 
 func NewController(service IService) *Controller {
