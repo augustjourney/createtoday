@@ -387,15 +387,6 @@ func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
 	}
 
-	defer func() {
-		for _, file := range body.Media {
-			err := RemoveLocalFile(file.Path)
-			if err != nil {
-				logger.Log.Error(err.Error())
-			}
-		}
-	}()
-
 	return common.DoApiResponse(ctx, http.StatusOK, "Задание успешно выполнено", nil)
 }
 
