@@ -192,23 +192,23 @@ type QuizInfo struct {
 
 type Media struct {
 	ID        int             `json:"id" db:"id"`
-	Name      sql.NullString  `json:"name" db:"name"`
+	Name      string          `json:"name" db:"name"`
 	Type      string          `json:"type" db:"type"`
 	Slug      string          `json:"slug" db:"slug"`
-	Mime      sql.NullString  `json:"mime" db:"mime"`
-	Ext       sql.NullString  `json:"ext" db:"ext"`
-	Size      *int            `json:"size" db:"size"`
+	Mime      string          `json:"mime" db:"mime"`
+	Ext       string          `json:"ext" db:"ext"`
+	Size      *int64          `json:"size" db:"size"`
 	Width     *int            `json:"width" db:"width"`
 	Height    *int            `json:"height" db:"height"`
-	URL       sql.NullString  `json:"url" db:"url"`
+	URL       string          `json:"url" db:"url"`
 	Sources   json.RawMessage `json:"sources" db:"sources"`
 	Blurhash  json.RawMessage `json:"blurhash" db:"blurhash"`
 	ParentID  *int            `json:"parent_id" db:"parent_id"`
 	Storage   string          `json:"storage" db:"storage"`
 	Duration  *int            `json:"duration" db:"duration"`
-	Bucket    sql.NullString  `json:"bucket" db:"bucket"`
-	Status    sql.NullString  `json:"status" db:"status"`
-	Caption   sql.NullString  `json:"caption" db:"caption"`
+	Bucket    string          `json:"bucket" db:"bucket"`
+	Status    string          `json:"status" db:"status"`
+	Caption   *string         `json:"caption" db:"caption"`
 	Original  bool            `json:"original" db:"original"`
 	CreatedAt time.Time       `json:"created_at" db:"created_at"`
 }
@@ -242,15 +242,19 @@ type QuizSolved struct {
 	UpdatedAt  time.Time       `json:"updated_at" db:"updated_at"`
 }
 
+type QuizSolvedAnswer struct {
+	Answer string `json:"answer" db:"answer"`
+}
+
 type QuizSolvedInfo struct {
-	ID         int             `json:"id" db:"id"`
-	UserAnswer json.RawMessage `json:"user_answer" db:"user_answer"`
-	Type       string          `json:"type" db:"type"`
-	Starred    bool            `json:"starred" db:"starred"`
-	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
-	Media      json.RawMessage `json:"media" db:"media"`
-	Lesson     json.RawMessage `json:"lesson" db:"lesson"`
-	Author     json.RawMessage `json:"author" db:"author"`
+	ID         int              `json:"id" db:"id"`
+	UserAnswer json.RawMessage  `json:"user_answer" db:"user_answer"`
+	Type       string           `json:"type" db:"type"`
+	Starred    bool             `json:"starred" db:"starred"`
+	CreatedAt  time.Time        `json:"created_at" db:"created_at"`
+	Media      *json.RawMessage `json:"media" db:"media"`
+	Lesson     json.RawMessage  `json:"lesson" db:"lesson"`
+	Author     json.RawMessage  `json:"author" db:"author"`
 }
 
 type QuizSolvedAuthor struct {
