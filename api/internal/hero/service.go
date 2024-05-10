@@ -6,13 +6,17 @@ import (
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/logger"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"image/jpeg"
+	"strings"
+	"time"
+
 	"github.com/disintegration/imaging"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"image/jpeg"
-	"time"
 )
 
 type IService interface {
@@ -34,6 +38,8 @@ type IService interface {
 	ChangePassword(ctx context.Context, userId int, password string) error
 
 	GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string) ([]QuizSolvedInfo, error)
+
+	SolveQuiz(ctx context.Context, dto SolveQuizDTO) error
 }
 
 type Claims struct {
@@ -197,6 +203,137 @@ func (s *Service) GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string
 		return solvedQuizzes, common.ErrInternalError
 	}
 	return solvedQuizzes, nil
+}
+
+func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
+
+	solvedQuiz, err := s.repo.FindSolvedQuiz(ctx, dto.UserID, dto.QuizSlug)
+
+	if err != nil && errors.Is(err, common.ErrSolvedQuizNotFound) {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	if solvedQuiz != nil {
+		return common.ErrQuizAlreadySolved
+	}
+
+	var savedMediaIds []int64
+
+	// Загружаем медиа у выполненного квиза, если они есть
+	for _, media := range dto.Media {
+		mediaType := s.getMediaTypeFromMime(media.Mime)
+		logger.Log.Info("mediaType " + mediaType)
+
+		if mediaType == "image" {
+			res, err := s.createImageMediaFromLocalFile(ctx, media)
+			if err != nil {
+				logger.Log.Error(err.Error())
+				continue
+			}
+			savedMediaIds = append(savedMediaIds, res.MediaId)
+		}
+	}
+
+	// Сохраняем выполненный квиз
+	answerJson, err := json.Marshal(QuizSolvedAnswer{Answer: dto.Answer})
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	solvedQuizId, err := s.repo.SolveQuiz(ctx, dto.QuizSlug, dto.UserID, answerJson)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	// Привязываем медиа к выполненному квизу
+	if len(savedMediaIds) > 0 {
+		err = s.repo.ConnectManyMedia(ctx, savedMediaIds, "quiz_solved", solvedQuizId)
+		if err != nil {
+			logger.Log.Error(err.Error(), "mediaIds", savedMediaIds, "solvedQuizId", solvedQuizId)
+			return common.ErrInternalError
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) createImageMediaFromLocalFile(ctx context.Context, file FileUpload) (FileUploadResult, error) {
+	src, err := imaging.Open(file.Path)
+
+	var result FileUploadResult
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	slug := uuid.New().String()
+	ext := "jpeg"
+	mime := "image/jpeg"
+
+	fileName := slug + "." + ext
+
+	buff := new(bytes.Buffer)
+
+	// Конвертация изображения в jpeg
+	err = jpeg.Encode(buff, src, nil)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	// Загрузка в S3
+	bucket := s.config.PhotosBucket
+	fileUrl, err := UploadFileToS3(bucket, fileName, bytes.NewReader(buff.Bytes()), s.config)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	// Получение размеров изображения
+	dimensions := src.Bounds().Size()
+
+	// Сохранение медиа в БД
+	media := Media{
+		Slug:    slug,
+		URL:     fileUrl,
+		Width:   &dimensions.X,
+		Height:  &dimensions.Y,
+		Size:    &file.Size,
+		Name:    fileName,
+		Ext:     ext,
+		Mime:    mime,
+		Bucket:  bucket,
+		Storage: s.config.S3Provider,
+		Type:    "image",
+		Status:  "uploaded",
+	}
+
+	mediaId, err := s.repo.SaveMedia(ctx, media)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "fileUrl", fileUrl)
+		return result, common.ErrInternalError
+	}
+
+	logger.Log.Info("uploaded file url", "fileUrl", fileUrl)
+
+	result.FileURL = fileUrl
+	result.MediaId = mediaId
+
+	return result, nil
+}
+
+func (s *Service) getMediaTypeFromMime(mime string) string {
+	parts := strings.SplitN(mime, "/", 2)
+	if len(parts) != 2 {
+		return "unknown-type"
+	}
+	return parts[0]
 }
 
 func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {
