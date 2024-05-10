@@ -5,13 +5,14 @@ import (
 	"createtodayapi/internal/logger"
 	"crypto/md5"
 	"encoding/hex"
+	"io"
+	"os"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"io"
-	"os"
-	"strings"
 )
 
 func UploadFileToS3(bucket string, fileName string, fileBytes io.ReadSeeker, config *config.Config) (string, error) {
@@ -45,6 +46,7 @@ func UploadFileToS3(bucket string, fileName string, fileBytes io.ReadSeeker, con
 func RemoveLocalFile(path string) error {
 	err := os.Remove(path)
 	if err != nil {
+		logger.Log.Error(err.Error(), "filePath", path)
 		return err
 	}
 	return nil
