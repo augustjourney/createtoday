@@ -26,4 +26,13 @@ type Storage interface {
 
 	// quizzes
 	GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug string) ([]QuizSolvedInfo, error)
+	SolveQuiz(ctx context.Context, quizSlug string, userId int, answer []byte) (int64, error)
+	FindSolvedQuiz(ctx context.Context, userId int, quizSlug string) (*QuizSolved, error)
+
+	// media
+	SaveMedia(ctx context.Context, media Media) (int64, error)
+	ConnectMedia(ctx context.Context, mediaId int64, relatedType string, relatedId int64) error
+	ConnectManyMedia(ctx context.Context, mediaIds []int64, relatedType string, relatedId int64) error
+	DeleteMedia(ctx context.Context, mediaId int64) error
+	UpdateMediaStatus(ctx context.Context, mediaId int64, status string) error
 }

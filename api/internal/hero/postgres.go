@@ -3,8 +3,10 @@ package hero
 import (
 	"context"
 	"createtodayapi/internal/common"
+	"createtodayapi/internal/logger"
 	"errors"
 	"fmt"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/jackc/pgerrcode"
@@ -313,6 +315,161 @@ func (r *PostgresRepo) GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug str
 	}
 
 	return solvedQuizzes, nil
+}
+
+func (r *PostgresRepo) SolveQuiz(ctx context.Context, quizSlug string, userId int, answer []byte) (int64, error) {
+	q := fmt.Sprintf(`
+		insert into %s (user_id, quiz_id, product_id, lesson_id, project_id, type, user_answer)
+		select :user_id, id, product_id, lesson_id, project_id, type, :answer
+		from %s 
+		where slug = :slug
+		returning id
+	`, SolvedQuizzesTable, QuizzesTable)
+
+	type solveQuizArgs struct {
+		Slug   string `json:"slug" db:"slug"`
+		UserId int    `json:"user_id" db:"user_id"`
+		Answer []byte `json:"answer" db:"answer"`
+	}
+
+	quizArgs := solveQuizArgs{
+		Slug:   quizSlug,
+		UserId: userId,
+		Answer: answer,
+	}
+
+	query, args, err := r.db.BindNamed(q, quizArgs)
+
+	if err != nil {
+		return 0, err
+	}
+
+	var solvedQuizId int64
+
+	err = r.db.GetContext(ctx, &solvedQuizId, query, args...)
+	if err != nil {
+		return 0, err
+	}
+
+	return solvedQuizId, nil
+}
+
+func (r *PostgresRepo) SaveMedia(ctx context.Context, media Media) (int64, error) {
+
+	q := fmt.Sprintf(`
+		insert into %s
+		(name, slug, bucket, mime, ext, storage, original, width, height, size, duration, type, url, status)
+		values (:name, :slug, :bucket, :mime, :ext, :storage, :original, :width, :height, :size, :duration, :type, :url, :status)
+		returning id;
+	`, MediaTable)
+
+	query, args, err := r.db.BindNamed(q, media)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "SaveMedia.bindNamed()")
+		return 0, err
+	}
+
+	var mediaId int64
+
+	err = r.db.GetContext(ctx, &mediaId, query, args...)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "SaveMedia.GetContext()")
+		return 0, err
+	}
+
+	return mediaId, nil
+}
+
+func (r *PostgresRepo) ConnectManyMedia(ctx context.Context, mediaIds []int64, relatedType string, relatedId int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	for _, mediaId := range mediaIds {
+		q := fmt.Sprintf(`
+			insert into %s
+			(media_id, related_type, related_id)
+			values ($1, $2, $3)
+		`, RelatedMediaTable)
+		_, err := tx.ExecContext(ctx, q, mediaId, relatedType, relatedId)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) ConnectMedia(ctx context.Context, mediaId int64, relatedType string, relatedId int64) error {
+	q := fmt.Sprintf(`
+			insert into %s
+			(media_id, related_type, related_id)
+			values ($1, $2, $3)
+		`, RelatedMediaTable)
+
+	_, err := r.db.ExecContext(ctx, q, mediaId, relatedType, relatedId)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.Postgres.ConnectMedia")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) DeleteMedia(ctx context.Context, mediaId int64) error {
+	q := fmt.Sprintf(`
+		delete from %s where id = $1; 
+		delete from %s where media_id = $1
+	`, MediaTable, RelatedMediaTable)
+
+	_, err := r.db.ExecContext(ctx, q, mediaId)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.DeleteMedia")
+		return err
+	}
+	return err
+}
+
+func (r *PostgresRepo) UpdateMediaStatus(ctx context.Context, mediaId int64, status string) error {
+	q := fmt.Sprintf(`update %s set status = $2 where id = $1`, MediaTable)
+	_, err := r.db.ExecContext(ctx, q, mediaId, status)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.UpdateMediaStatus")
+		return err
+	}
+	return nil
+}
+
+func (r *PostgresRepo) FindSolvedQuiz(ctx context.Context, userId int, quizSlug string) (*QuizSolved, error) {
+	q := fmt.Sprintf(`
+		select * from %s 
+		where user_id = $1
+		and quiz_id = (select id from %s where slug = $2)
+	`, SolvedQuizzesTable, QuizzesTable)
+
+	var quizSolved QuizSolved
+
+	err := r.db.GetContext(ctx, &quizSolved, q, userId, quizSlug)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, common.ErrSolvedQuizNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.FindSolvedQuiz")
+		return nil, err
+	}
+
+	return &quizSolved, nil
 }
 
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
