@@ -34,3 +34,13 @@ var ErrEmptyAvatar = errors.New("Аватар не может быть пуст�
 // profile
 var ErrNewPasswordIsEmpty = errors.New("Новый пароль не может быть пустым")
 var ErrNewPasswordIsShort = errors.New("Новый пароль не может быть меньше 8 символов")
+
+// quizzes
+var ErrEmptyQuizType = errors.New("Тип задания не может быть пустым")
+var ErrEmptyQuizAnswer = errors.New("Ответ не может быть пустым")
+var ErrEmptyQuizPhoto = errors.New("Чтобы выполнить задание, загрузите фото")
+var ErrEmptyQuizVideo = errors.New("Чтобы выполнить задание, загрузите видео")
+var ErrQuizTooManyPhotos = errors.New("Загрузить можно только одно фото к этому заданию")
+var ErrQuizTooManyVideos = errors.New("Загрузить можно только одно видео к этому заданию")
+var ErrQuizAlreadySolved = errors.New("Вы уже выполнили это задание")
+var ErrSolvedQuizNotFound = errors.New("Не найден такой выполненный квиз")
