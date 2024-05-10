@@ -3,9 +3,10 @@ package config
 import (
 	"createtodayapi/internal/logger"
 	"flag"
-	"github.com/joho/godotenv"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -29,6 +30,7 @@ type Config struct {
 	S3SecretAccessKey  string `env:"S3_SECRET_ACCESS_KEY"`
 	CdnUrl             string `env:"CDN_URL"`
 	PhotosBucket       string `env:"PHOTOS_BUCKET"`
+	S3Provider         string `env:"S3_PROVIDER"`
 }
 
 var config Config
@@ -52,6 +54,7 @@ func New() *Config {
 	config.S3Endpoint = "https://s3.storage.selcloud.ru"
 	config.S3Region = "ru-1a"
 	config.PhotosBucket = "photos"
+	config.S3Provider = "selectel"
 
 	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
 		config.DatabaseDSN = databaseDSN
