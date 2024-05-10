@@ -94,3 +94,58 @@ func (b *UpdatePasswordBody) Validate() error {
 
 	return nil
 }
+
+type SolveQuizBody struct {
+	Answer string `json:"answer"`
+	Type   string `json:"type"`
+	Media  []FileUpload
+}
+
+type FileUpload struct {
+	FileName string `json:"file_name"`
+	Path     string `json:"path"`
+	Size     int64  `json:"size"`
+	FileURL  string `json:"file_url"`
+	Mime     string `json:"mime"`
+}
+
+type FileUploadResult struct {
+	MediaId int64  `json:"media_id"`
+	FileURL string `json:"file_url"`
+}
+
+func (b *SolveQuizBody) Validate() error {
+	if b.Type == "" {
+		return common.ErrEmptyQuizType
+	}
+
+	if b.Type == "answer_quiz" && b.Answer == "" {
+		return common.ErrEmptyQuizAnswer
+	}
+
+	if len(b.Media) == 0 && b.Type == "one_photo" {
+		return common.ErrEmptyQuizPhoto
+	}
+
+	if len(b.Media) == 0 && b.Type == "one_video" {
+		return common.ErrEmptyQuizVideo
+	}
+
+	if b.Type == "one_photo" && len(b.Media) > 1 {
+		return common.ErrQuizTooManyPhotos
+	}
+
+	if b.Type == "one_video" && len(b.Media) > 1 {
+		return common.ErrQuizTooManyVideos
+	}
+
+	return nil
+}
+
+type SolveQuizDTO struct {
+	Answer   string
+	Type     string
+	UserID   int
+	QuizSlug string
+	Media    []FileUpload
+}
