@@ -229,7 +229,7 @@ type MediaInfo struct {
 }
 
 type QuizSolved struct {
-	ID         int             `json:"id" db:"id"`
+	ID         int64           `json:"id" db:"id"`
 	UserID     int             `json:"user_id" db:"user_id"`
 	QuizID     int             `json:"quiz_id" db:"quiz_id"`
 	ProductID  int             `json:"product_id" db:"product_id"`
@@ -238,6 +238,7 @@ type QuizSolved struct {
 	UserAnswer json.RawMessage `json:"user_answer" db:"user_answer"`
 	Type       string          `json:"type" db:"type"`
 	Starred    bool            `json:"starred" db:"starred"`
+	IsDeleted  bool            `json:"is_deleted" db:"is_deleted"`
 	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt  time.Time       `json:"updated_at" db:"updated_at"`
 }

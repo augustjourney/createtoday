@@ -40,6 +40,7 @@ type IService interface {
 	GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string) ([]QuizSolvedInfo, error)
 	SolveQuiz(ctx context.Context, dto SolveQuizDTO) error
 	GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
+	DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error
 }
 
 type Claims struct {
@@ -256,13 +257,30 @@ func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
 
 	// Привязываем медиа к выполненному квизу
 	if len(savedMediaIds) > 0 {
-		err = s.repo.ConnectManyMedia(ctx, savedMediaIds, "quiz_solved", solvedQuizId)
+		err = s.repo.ConnectManyMedia(ctx, savedMediaIds, "solved_quiz", solvedQuizId)
 		if err != nil {
 			logger.Log.Error(err.Error(), "mediaIds", savedMediaIds, "solvedQuizId", solvedQuizId)
 			return common.ErrInternalError
 		}
 	}
 
+	return nil
+}
+
+func (s *Service) DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error {
+	solvedQuiz, err := s.repo.FindSolvedQuiz(ctx, userId, quizSlug)
+	if err != nil {
+		if errors.Is(err, common.ErrSolvedQuizNotFound) {
+			return nil
+		}
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+	err = s.repo.DeleteSolvedQuiz(ctx, solvedQuiz.ID, userId)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
 	return nil
 }
 

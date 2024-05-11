@@ -426,7 +426,7 @@ func (r *PostgresRepo) ConnectMedia(ctx context.Context, mediaId int64, relatedT
 
 func (r *PostgresRepo) DeleteMedia(ctx context.Context, mediaId int64) error {
 	q := fmt.Sprintf(`
-		delete from %s where id = $1; 
+		update %s set status = 'to_delete' where id = $1; 
 		delete from %s where media_id = $1
 	`, MediaTable, RelatedMediaTable)
 
@@ -487,6 +487,56 @@ func (r *PostgresRepo) GetQuizBySlug(ctx context.Context, quizSlug string) (*Qui
 	}
 
 	return &quiz, nil
+}
+
+func (r *PostgresRepo) DeleteSolvedQuiz(ctx context.Context, solvedQuizId int64, userId int) error {
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	q1 := fmt.Sprintf(`
+		update %s set status = $2 
+		where id = (select media_id from %s where related_type = 'solved_quiz' and related_id = $1)
+	`, MediaTable, RelatedMediaTable)
+
+	_, err = tx.ExecContext(ctx, q1, solvedQuizId, "to_delete")
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.DeleteSolvedQuiz.Q1")
+		_ = tx.Rollback()
+		return err
+	}
+
+	q2 := fmt.Sprintf(`
+		delete from %s where related_type = 'solved_quiz' and related_id = $1
+	`, RelatedMediaTable)
+
+	_, err = tx.ExecContext(ctx, q2, solvedQuizId)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.DeleteSolvedQuiz.Q2")
+		_ = tx.Rollback()
+		return err
+	}
+
+	q3 := fmt.Sprintf(`
+		delete from %s where id = $1 and user_id = $2
+	`, SolvedQuizzesTable)
+
+	_, err = tx.ExecContext(ctx, q3, solvedQuizId, userId)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.DeleteSolvedQuiz.Q3")
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.DeleteSolvedQuiz.Commit")
+		return err
+	}
+
+	return nil
 }
 
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {

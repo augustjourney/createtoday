@@ -7,10 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gofiber/fiber/v2"
 	"net/http"
 	"os"
-
-	"github.com/gofiber/fiber/v2"
 )
 
 type IController interface {
@@ -29,6 +28,7 @@ type IController interface {
 
 	// Quizzes
 	SolveQuiz(ctx *fiber.Ctx) error
+	DeleteSolvedQuiz(ctx *fiber.Ctx) error
 }
 
 type Controller struct {
@@ -406,6 +406,19 @@ func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 	}
 
 	return common.DoApiResponse(ctx, http.StatusOK, "Задание успешно выполнено", nil)
+}
+
+func (c *Controller) DeleteSolvedQuiz(ctx *fiber.Ctx) error {
+
+	quizSlug := ctx.Params("slug")
+	user := ctx.Locals("user").(*User)
+
+	err := c.service.DeleteSolvedQuiz(context.Background(), quizSlug, user.ID)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Выполненное задание удалено", nil)
 }
 
 func NewController(service IService) *Controller {

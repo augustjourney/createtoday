@@ -2,6 +2,7 @@ package hero
 
 import (
 	"createtodayapi/internal/config"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/jmoiron/sqlx"
 )
@@ -31,6 +32,7 @@ func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
 	hero.Get("/courses/:courseSlug/lessons/:slug", AuthMiddleware(service), controller.GetUserAccessibleLesson)
 	hero.Get("/quizzes/:slug/solved", AuthMiddleware(service), controller.GetSolvedQuizzesForQuiz)
 	hero.Post("/quizzes/:slug/solved", AuthMiddleware(service), controller.SolveQuiz)
+	hero.Delete("/quizzes/:slug/solved", AuthMiddleware(service), controller.DeleteSolvedQuiz)
 
 	return app
 }
