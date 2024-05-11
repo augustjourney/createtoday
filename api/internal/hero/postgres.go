@@ -4,10 +4,9 @@ import (
 	"context"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/logger"
+	"database/sql"
 	"errors"
 	"fmt"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -36,7 +35,7 @@ func (r *PostgresRepo) FindUserByEmail(ctx context.Context, email string) (*User
 	var user User
 	err := r.db.GetContext(ctx, &user, q, email)
 	if err != nil {
-		if errors.As(err, &pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.ErrUserNotFound
 		}
 		return nil, err
@@ -49,7 +48,7 @@ func (r *PostgresRepo) FindUserById(ctx context.Context, id int) (*User, error) 
 	var user User
 	err := r.db.GetContext(ctx, &user, q, id)
 	if err != nil {
-		if errors.As(err, &pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.ErrUserNotFound
 		}
 		return nil, err
@@ -66,7 +65,7 @@ func (r *PostgresRepo) GetProfileByUserId(ctx context.Context, userId int) (*Pro
 	var profile Profile
 	err := r.db.GetContext(ctx, &profile, q, userId)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.ErrUserNotFound
 		}
 		return nil, err
@@ -161,7 +160,7 @@ func (r *PostgresRepo) GetUserAccessibleProduct(ctx context.Context, productSlug
 	var product ProductInfo
 	err := r.db.GetContext(ctx, &product, q, productSlug, userId)
 	if err != nil {
-		if errors.As(err, &pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.ErrProductNotFound
 		}
 		return nil, err
@@ -245,7 +244,7 @@ func (r *PostgresRepo) GetUserAccessibleLesson(ctx context.Context, lessonSlug s
 	err := r.db.GetContext(ctx, &lesson, q, lessonSlug, userId)
 
 	if err != nil {
-		if errors.As(err, &pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.ErrLessonNotFound
 		}
 		return nil, err
@@ -460,7 +459,7 @@ func (r *PostgresRepo) FindSolvedQuiz(ctx context.Context, userId int, quizSlug 
 
 	err := r.db.GetContext(ctx, &quizSolved, q, userId, quizSlug)
 
-	if errors.As(err, &pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, common.ErrSolvedQuizNotFound
 	}
 
@@ -478,7 +477,7 @@ func (r *PostgresRepo) GetQuizBySlug(ctx context.Context, quizSlug string) (*Qui
 	var quiz Quiz
 	err := r.db.GetContext(ctx, &quiz, q, quizSlug)
 
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, common.ErrQuizNotFound
 	}
 
