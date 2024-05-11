@@ -330,7 +330,14 @@ func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 
 	quiz, err := c.service.GetQuizBySlug(globalContext, slug)
 
-	if errors.Is(err, common.ErrQuizNotFound) || quiz == nil {
+	if err != nil {
+		if errors.Is(err, common.ErrQuizNotFound) {
+			return common.DoApiResponse(ctx, http.StatusBadRequest, nil, common.ErrQuizNotFound)
+		}
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+	}
+
+	if quiz == nil {
 		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, common.ErrQuizNotFound)
 	}
 
@@ -390,7 +397,7 @@ func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 		Media:    body.Media,
 	})
 
-	if errors.Is(err, common.ErrQuizAlreadySolved) {
+	if err != nil && errors.Is(err, common.ErrQuizAlreadySolved) {
 		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
 	}
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"image/jpeg"
+	"os"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -208,7 +209,7 @@ func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
 
 	solvedQuiz, err := s.repo.FindSolvedQuiz(ctx, dto.UserID, dto.QuizSlug)
 
-	if !errors.Is(err, common.ErrSolvedQuizNotFound) {
+	if err != nil && !errors.Is(err, common.ErrSolvedQuizNotFound) {
 		logger.Log.Error(err.Error())
 		return common.ErrInternalError
 	}
@@ -228,6 +229,15 @@ func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
 				continue
 			}
 			savedMediaIds = append(savedMediaIds, res.MediaId)
+		} else if file.MediaType == "video" {
+			res, err := s.createVideoMediaFromLocalFile(ctx, file)
+			if err != nil {
+				logger.Log.Error(err.Error())
+				continue
+			}
+			savedMediaIds = append(savedMediaIds, res.MediaId)
+		} else {
+			logger.Log.Error("unknown media type", "mediaType", file.MediaType)
 		}
 	}
 
@@ -254,6 +264,56 @@ func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
 	}
 
 	return nil
+}
+
+func (s *Service) createVideoMediaFromLocalFile(ctx context.Context, file FileUpload) (FileUploadResult, error) {
+	var result FileUploadResult
+
+	f, err := os.Open(file.Path)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	slug := uuid.New().String()
+	ext := GetExtensionFromFileName(file.FileName)
+
+	fileName := slug + "." + ext
+	bucket := s.config.VideosBucket
+
+	fileUrl, err := UploadFileToS3(bucket, fileName, f, s.config)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	media := Media{
+		Slug:    slug,
+		URL:     fileUrl,
+		Size:    &file.Size,
+		Name:    fileName,
+		Ext:     ext,
+		Mime:    file.Mime,
+		Bucket:  bucket,
+		Storage: s.config.S3Provider,
+		Type:    file.MediaType,
+		Status:  "uploaded",
+	}
+
+	mediaId, err := s.repo.SaveMedia(ctx, media)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "fileUrl", fileUrl)
+		return result, common.ErrInternalError
+	}
+
+	logger.Log.Info("uploaded file url", "fileUrl", fileUrl)
+
+	result.FileURL = fileUrl
+	result.MediaId = mediaId
+
+	return result, nil
 }
 
 func (s *Service) createImageMediaFromLocalFile(ctx context.Context, file FileUpload) (FileUploadResult, error) {
@@ -305,7 +365,7 @@ func (s *Service) createImageMediaFromLocalFile(ctx context.Context, file FileUp
 		Mime:    mime,
 		Bucket:  bucket,
 		Storage: s.config.S3Provider,
-		Type:    "image",
+		Type:    file.MediaType,
 		Status:  "uploaded",
 	}
 
