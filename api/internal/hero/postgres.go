@@ -25,6 +25,7 @@ const QuizzesTable = "public.quiz"
 const MediaTable = "public.media"
 const RelatedMediaTable = "public.related_media"
 const SolvedQuizzesTable = "public.quiz_solved"
+const SolvedQuizzesView = "public._solvedquizzes"
 
 type PostgresRepo struct {
 	db *sqlx.DB
@@ -253,56 +254,60 @@ func (r *PostgresRepo) GetUserAccessibleLesson(ctx context.Context, lessonSlug s
 	return &lesson, nil
 }
 
+func (r *PostgresRepo) GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error) {
+	var solvedQuizzes []QuizSolvedInfo
+
+	q := fmt.Sprintf(`
+		select q.id, q.user_answer, q.type, q.created_at, q.starred, q.media, q.lesson, q.author
+		from %s as q
+		where q.product_id = (select id from %s where slug = $1 and user_id = $2)		
+		order by q.created_at desc;
+	`, SolvedQuizzesView, UsersProductsView)
+
+	err := r.db.SelectContext(ctx, &solvedQuizzes, q, productSlug, userId)
+	if err != nil {
+		return make([]QuizSolvedInfo, 0), err
+	}
+
+	if solvedQuizzes == nil {
+		return make([]QuizSolvedInfo, 0), nil
+	}
+
+	return solvedQuizzes, nil
+}
+
+func (r *PostgresRepo) GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error) {
+	var solvedQuizzes []QuizSolvedInfo
+
+	q := fmt.Sprintf(`
+		select q.id, q.user_answer, q.type, q.created_at, q.starred, q.media, q.lesson, q.author
+		from %s as q
+		where q.product_id = (select id from %s where slug = $1 and user_id = $2) and user_id = $2	
+		order by q.created_at desc;
+	`, SolvedQuizzesView, UsersProductsView)
+
+	err := r.db.SelectContext(ctx, &solvedQuizzes, q, productSlug, userId)
+	if err != nil {
+		return make([]QuizSolvedInfo, 0), err
+	}
+
+	if solvedQuizzes == nil {
+		return make([]QuizSolvedInfo, 0), nil
+	}
+
+	return solvedQuizzes, nil
+}
+
 func (r *PostgresRepo) GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug string) ([]QuizSolvedInfo, error) {
 	var solvedQuizzes []QuizSolvedInfo
 
 	q := fmt.Sprintf(`
-		select q.id, q.user_answer, q.type, q.created_at, q.starred, qm.media, ql.lesson,
-		json_build_object(
-			'first_name', u.first_name,
-            'last_name', u.last_name,
-            'avatar', u.avatar
-		) as author
-		
+		select q.id, q.user_answer, q.type, q.created_at, q.starred, q.media, q.lesson, q.author
 		from %s as q
-		
-		-- media
-		left join lateral (
-		    select 
-		    	json_agg(
-		    		json_build_object(
-		    			'url', m.url,
-		    			'sources', m.sources,
-		    			'type', m.type
-		    		)		    		
-		    	) as media
-		    from %s as rm
-		    join %s as m on m.id = rm.media_id
-		    where rm.related_type = 'solved_quiz' and rm.related_id = q.id
-		) as qm on true
-		
-		-- lesson
-		left join lateral (
-		    select json_build_object(
-		    	'slug', l.slug,
-		    	'name', l.name,
-		    	'product', json_build_object(
-		    		'name', p.name,
-		    		'slug', p.slug
-		    	) 
-		    ) as lesson 
-		    from %s as l
-		    join %s as p on p.id = l.product_id
-		    where l.id = q.lesson_id
-		) as ql on true
-		
-		-- author
-		join %s as u on u.id = q.user_id
-		
 		where q.quiz_id = (select id from %s where slug = $1)
 		
 		order by q.created_at desc;
-	`, SolvedQuizzesTable, RelatedMediaTable, MediaTable, LessonsTable, ProductsTable, UsersTable, QuizzesTable)
+	`, SolvedQuizzesView, QuizzesTable)
 
 	err := r.db.SelectContext(ctx, &solvedQuizzes, q, quizSlug)
 	if err != nil {

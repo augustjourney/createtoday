@@ -314,6 +314,30 @@ func (c *Controller) GetSolvedQuizzesForQuiz(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
 }
 
+func (c *Controller) GetSolvedQuizzesForProduct(ctx *fiber.Ctx) error {
+	slug := ctx.Params("slug")
+	user := ctx.Locals("user").(*User)
+
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForProduct(context.Background(), slug, user.ID)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, solvedQuizzes, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
+}
+
+func (c *Controller) GetSolvedQuizzesForUser(ctx *fiber.Ctx) error {
+	slug := ctx.Params("slug")
+	user := ctx.Locals("user").(*User)
+
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForUser(context.Background(), slug, user.ID)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, solvedQuizzes, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
+}
+
 func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 	var body SolveQuizBody
 

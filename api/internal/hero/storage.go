@@ -26,6 +26,8 @@ type Storage interface {
 
 	// quizzes
 	GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug string) ([]QuizSolvedInfo, error)
+	GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error)
+	GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error)
 	SolveQuiz(ctx context.Context, quizSlug string, userId int, answer []byte) (int64, error)
 	FindSolvedQuiz(ctx context.Context, userId int, quizSlug string) (*QuizSolved, error)
 	GetQuizBySlug(ctx context.Context, quizSlug string) (*Quiz, error)

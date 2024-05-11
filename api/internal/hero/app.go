@@ -23,13 +23,18 @@ func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
 	hero.Post("/auth/login/get-magic-link", controller.GetMagicLink)
 	hero.Post("/auth/login/validate-magic-link", controller.ValidateMagicLink)
 	hero.Post("/auth/signup", controller.Signup)
+
 	hero.Get("/profile", AuthMiddleware(service), controller.GetProfile)
 	hero.Post("/profile", AuthMiddleware(service), controller.UpdateProfile)
 	hero.Post("/profile/avatar", AuthMiddleware(service), controller.ChangeAvatar)
 	hero.Post("/profile/password", AuthMiddleware(service), controller.UpdatePassword)
+
 	hero.Get("/courses", AuthMiddleware(service), controller.GetUserAccessibleProducts)
 	hero.Get("/courses/:slug/lessons", AuthMiddleware(service), controller.GetUserAccessibleProduct)
+	hero.Get("/courses/:slug/feed", AuthMiddleware(service), controller.GetSolvedQuizzesForProduct)
+	hero.Get("/courses/:slug/solved-quizzes", AuthMiddleware(service), controller.GetSolvedQuizzesForUser)
 	hero.Get("/courses/:courseSlug/lessons/:slug", AuthMiddleware(service), controller.GetUserAccessibleLesson)
+
 	hero.Get("/quizzes/:slug/solved", AuthMiddleware(service), controller.GetSolvedQuizzesForQuiz)
 	hero.Post("/quizzes/:slug/solved", AuthMiddleware(service), controller.SolveQuiz)
 	hero.Delete("/quizzes/:slug/solved", AuthMiddleware(service), controller.DeleteSolvedQuiz)
