@@ -44,3 +44,4 @@ var ErrQuizTooManyPhotos = errors.New("Загрузить можно тольк�
 var ErrQuizTooManyVideos = errors.New("Загрузить можно только одно видео к этому заданию")
 var ErrQuizAlreadySolved = errors.New("Вы уже выполнили это задание")
 var ErrSolvedQuizNotFound = errors.New("Не найден такой выполненный квиз")
+var ErrQuizNotFound = errors.New("Квиз не найден")

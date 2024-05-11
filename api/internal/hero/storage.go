@@ -28,6 +28,7 @@ type Storage interface {
 	GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug string) ([]QuizSolvedInfo, error)
 	SolveQuiz(ctx context.Context, quizSlug string, userId int, answer []byte) (int64, error)
 	FindSolvedQuiz(ctx context.Context, userId int, quizSlug string) (*QuizSolved, error)
+	GetQuizBySlug(ctx context.Context, quizSlug string) (*Quiz, error)
 
 	// media
 	SaveMedia(ctx context.Context, media Media) (int64, error)

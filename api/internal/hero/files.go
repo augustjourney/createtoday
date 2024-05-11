@@ -61,6 +61,14 @@ func GetExtensionFromFileName(fileName string) string {
 	return ext[len(ext)-1]
 }
 
+func GetMediaTypeFromMime(mime string) string {
+	parts := strings.SplitN(mime, "/", 2)
+	if len(parts) != 2 {
+		return "unknown-type"
+	}
+	return parts[0]
+}
+
 func MakeFileHashName(text string, ext string) string {
 	hash := md5.Sum([]byte(text))
 	hashString := hex.EncodeToString(hash[:])

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"image/jpeg"
-	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -38,8 +37,8 @@ type IService interface {
 	ChangePassword(ctx context.Context, userId int, password string) error
 
 	GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string) ([]QuizSolvedInfo, error)
-
 	SolveQuiz(ctx context.Context, dto SolveQuizDTO) error
+	GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
 }
 
 type Claims struct {
@@ -209,7 +208,7 @@ func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
 
 	solvedQuiz, err := s.repo.FindSolvedQuiz(ctx, dto.UserID, dto.QuizSlug)
 
-	if err != nil && errors.Is(err, common.ErrSolvedQuizNotFound) {
+	if !errors.Is(err, common.ErrSolvedQuizNotFound) {
 		logger.Log.Error(err.Error())
 		return common.ErrInternalError
 	}
@@ -221,12 +220,9 @@ func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
 	var savedMediaIds []int64
 
 	// Загружаем медиа у выполненного квиза, если они есть
-	for _, media := range dto.Media {
-		mediaType := s.getMediaTypeFromMime(media.Mime)
-		logger.Log.Info("mediaType " + mediaType)
-
-		if mediaType == "image" {
-			res, err := s.createImageMediaFromLocalFile(ctx, media)
+	for _, file := range dto.Media {
+		if file.MediaType == "image" {
+			res, err := s.createImageMediaFromLocalFile(ctx, file)
 			if err != nil {
 				logger.Log.Error(err.Error())
 				continue
@@ -328,12 +324,19 @@ func (s *Service) createImageMediaFromLocalFile(ctx context.Context, file FileUp
 	return result, nil
 }
 
-func (s *Service) getMediaTypeFromMime(mime string) string {
-	parts := strings.SplitN(mime, "/", 2)
-	if len(parts) != 2 {
-		return "unknown-type"
+func (s *Service) GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error) {
+	quiz, err := s.repo.GetQuizBySlug(ctx, slug)
+
+	if errors.Is(err, common.ErrQuizNotFound) {
+		return nil, common.ErrQuizNotFound
 	}
-	return parts[0]
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	return quiz, nil
 }
 
 func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {

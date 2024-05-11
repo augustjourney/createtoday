@@ -460,7 +460,7 @@ func (r *PostgresRepo) FindSolvedQuiz(ctx context.Context, userId int, quizSlug 
 
 	err := r.db.GetContext(ctx, &quizSolved, q, userId, quizSlug)
 
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.As(err, &pgx.ErrNoRows) {
 		return nil, common.ErrSolvedQuizNotFound
 	}
 
@@ -470,6 +470,24 @@ func (r *PostgresRepo) FindSolvedQuiz(ctx context.Context, userId int, quizSlug 
 	}
 
 	return &quizSolved, nil
+}
+
+func (r *PostgresRepo) GetQuizBySlug(ctx context.Context, quizSlug string) (*Quiz, error) {
+	q := fmt.Sprintf(`select * from %s where slug = $1`, QuizzesTable)
+
+	var quiz Quiz
+	err := r.db.GetContext(ctx, &quiz, q, quizSlug)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, common.ErrQuizNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.GetQuizBySlug")
+		return nil, err
+	}
+
+	return &quiz, nil
 }
 
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {

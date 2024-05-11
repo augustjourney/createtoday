@@ -323,7 +323,18 @@ func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
 	}
 
-	body.Type = form.Value["type"][0]
+	globalContext := context.Background()
+
+	slug := ctx.Params("slug")
+	user := ctx.Locals("user").(*User)
+
+	quiz, err := c.service.GetQuizBySlug(globalContext, slug)
+
+	if errors.Is(err, common.ErrQuizNotFound) || quiz == nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, common.ErrQuizNotFound)
+	}
+
+	body.Type = quiz.Type
 	body.Answer = form.Value["answer"][0]
 
 	media := form.File["media"]
@@ -354,11 +365,14 @@ func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 				return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
 			}
 
+			mime := file.Header.Get("Content-Type")
+
 			body.Media = append(body.Media, FileUpload{
-				FileName: file.Filename,
-				Size:     file.Size,
-				Path:     filePath,
-				Mime:     file.Header.Get("Content-Type"),
+				FileName:  file.Filename,
+				Size:      file.Size,
+				Path:      filePath,
+				Mime:      mime,
+				MediaType: GetMediaTypeFromMime(mime),
 			})
 		}
 	}
@@ -368,10 +382,7 @@ func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
 		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
 	}
 
-	user := ctx.Locals("user").(*User)
-	slug := ctx.Params("slug")
-
-	err = c.service.SolveQuiz(context.Background(), SolveQuizDTO{
+	err = c.service.SolveQuiz(globalContext, SolveQuizDTO{
 		Answer:   body.Answer,
 		UserID:   user.ID,
 		Type:     body.Type,

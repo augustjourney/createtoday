@@ -102,11 +102,12 @@ type SolveQuizBody struct {
 }
 
 type FileUpload struct {
-	FileName string `json:"file_name"`
-	Path     string `json:"path"`
-	Size     int64  `json:"size"`
-	FileURL  string `json:"file_url"`
-	Mime     string `json:"mime"`
+	FileName  string `json:"file_name"`
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	FileURL   string `json:"file_url"`
+	Mime      string `json:"mime"`
+	MediaType string `json:"media_type"`
 }
 
 type FileUploadResult struct {
