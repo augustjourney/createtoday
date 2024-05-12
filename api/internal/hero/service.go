@@ -33,6 +33,7 @@ type IService interface {
 	GetUserAccessibleProduct(ctx context.Context, courseSlug string, userId int) (*ProductInfo, error)
 
 	GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error)
+	CompleteLesson(ctx context.Context, lessonSlug string, userId int) error
 
 	ChangeAvatar(ctx context.Context, userId int, avatarPath string, avatarFileName string) error
 	ChangePassword(ctx context.Context, userId int, password string) error
@@ -197,6 +198,15 @@ func (s *Service) GetUserAccessibleLesson(ctx context.Context, lessonSlug string
 	}
 
 	return lesson, nil
+}
+
+func (s *Service) CompleteLesson(ctx context.Context, lessonSlug string, userId int) error {
+	err := s.repo.CompleteLesson(ctx, lessonSlug, userId)
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+	return nil
 }
 
 func (s *Service) GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string, skip int, limit int) ([]QuizSolvedInfo, error) {

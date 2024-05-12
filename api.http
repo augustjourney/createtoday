@@ -98,6 +98,13 @@ GET {{serverAddress}}/hero/courses/{{courseSlug}}/lessons/{{lessonSlug}}
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
+### Complete Lesson
+POST {{serverAddress}}/hero/courses/{{courseSlug}}/lessons/{{lessonSlug}}
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+{}
+
 ### Lesson Solved Quizzes
 GET {{serverAddress}}/hero/courses/{{courseSlug}}/lessons/{{lessonSlug}}/quizzes/{{quizSlug}}/solved?skip=0&limit=2
 Accept: application/json

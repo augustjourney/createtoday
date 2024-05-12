@@ -26,6 +26,7 @@ const MediaTable = "public.media"
 const RelatedMediaTable = "public.related_media"
 const SolvedQuizzesTable = "public.quiz_solved"
 const SolvedQuizzesView = "public._solvedquizzes"
+const CompletedLessonsTable = "public.completed_lessons"
 
 type PostgresRepo struct {
 	db *sqlx.DB
@@ -199,7 +200,8 @@ func (r *PostgresRepo) GetUserAccessibleLesson(ctx context.Context, lessonSlug s
 		    'settings', p.settings
 		) as product, 
 		coalesce(lq.quizzes, '{}'::json) as quizzes,
-		coalesce(lm.media, '{}'::json) as media
+		coalesce(lm.media, '{}'::json) as media,
+		nl.slug as next_lesson
 		
 		from %s as l
 		join %s as p on p.id = l.product_id and p.user_id = $2
@@ -236,9 +238,13 @@ func (r *PostgresRepo) GetUserAccessibleLesson(ctx context.Context, lessonSlug s
 		    join %s as m on m.id = rm.media_id
 		    where rm.related_type = 'lesson' and rm.related_id = l.id
 		) as lm on true
+		
+		-- next lesson
+		left join %s as nl on nl.product_id = l.product_id 
+        and l.is_published is true and nl.position = (l.position + 1)
 		             
 		where l.slug = $1 and l.is_published = true
-	`, LessonsTable, UsersProductsView, QuizzesTable, RelatedMediaTable, MediaTable)
+	`, LessonsTable, UsersProductsView, QuizzesTable, RelatedMediaTable, MediaTable, LessonsTable)
 
 	var lesson LessonInfo
 
@@ -252,6 +258,23 @@ func (r *PostgresRepo) GetUserAccessibleLesson(ctx context.Context, lessonSlug s
 	}
 
 	return &lesson, nil
+}
+
+func (r *PostgresRepo) CompleteLesson(ctx context.Context, lessonSlug string, userId int) error {
+	q := fmt.Sprintf(`
+		insert into %s
+		(user_id, lesson_id, product_id)
+		select $1, id, product_id from %s where slug = $2
+		on conflict (user_id, lesson_id, product_id)
+        do nothing;
+	`, CompletedLessonsTable, LessonsTable)
+
+	_, err := r.db.ExecContext(ctx, q, userId, lessonSlug)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.CompleteLesson")
+		return err
+	}
+	return nil
 }
 
 func (r *PostgresRepo) GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error) {

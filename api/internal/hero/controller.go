@@ -22,6 +22,9 @@ type IController interface {
 	// Products
 	GetUserAccessibleProducts(ctx *fiber.Ctx) error
 
+	// Lessons
+	CompleteLesson(ctx *fiber.Ctx) error
+
 	// Profile
 	GetProfile(ctx *fiber.Ctx) error
 	UpdatePassword(ctx *fiber.Ctx) error
@@ -301,6 +304,16 @@ func (c *Controller) GetUserAccessibleLesson(ctx *fiber.Ctx) error {
 		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
 	}
 	return common.DoApiResponse(ctx, http.StatusOK, lesson, nil)
+}
+
+func (c *Controller) CompleteLesson(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+	slug := ctx.Params("slug")
+	err := c.service.CompleteLesson(context.Background(), slug, user.ID)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+	return common.DoApiResponse(ctx, http.StatusOK, "Урок пройден", nil)
 }
 
 func (c *Controller) GetSolvedQuizzesForQuiz(ctx *fiber.Ctx) error {

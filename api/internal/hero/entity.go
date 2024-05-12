@@ -114,6 +114,7 @@ type LessonInfo struct {
 	Product     json.RawMessage  `json:"product" db:"product"`
 	Quizzes     json.RawMessage  `json:"quizzes" db:"quizzes"`
 	Media       json.RawMessage  `json:"media" db:"media"`
+	NextLesson  *string          `json:"next_lesson" db:"next_lesson"`
 }
 
 type LessonContent struct {
