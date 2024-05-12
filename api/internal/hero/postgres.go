@@ -254,17 +254,19 @@ func (r *PostgresRepo) GetUserAccessibleLesson(ctx context.Context, lessonSlug s
 	return &lesson, nil
 }
 
-func (r *PostgresRepo) GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error) {
+func (r *PostgresRepo) GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error) {
 	var solvedQuizzes []QuizSolvedInfo
 
 	q := fmt.Sprintf(`
 		select q.id, q.user_answer, q.type, q.created_at, q.starred, q.media, q.lesson, q.author
 		from %s as q
 		where q.product_id = (select id from %s where slug = $1 and user_id = $2)		
-		order by q.created_at desc;
+		order by q.created_at desc
+		offset $3
+		fetch next $4 rows only;
 	`, SolvedQuizzesView, UsersProductsView)
 
-	err := r.db.SelectContext(ctx, &solvedQuizzes, q, productSlug, userId)
+	err := r.db.SelectContext(ctx, &solvedQuizzes, q, productSlug, userId, skip, limit)
 	if err != nil {
 		return make([]QuizSolvedInfo, 0), err
 	}
@@ -276,17 +278,19 @@ func (r *PostgresRepo) GetSolvedQuizzesForProduct(ctx context.Context, productSl
 	return solvedQuizzes, nil
 }
 
-func (r *PostgresRepo) GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error) {
+func (r *PostgresRepo) GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error) {
 	var solvedQuizzes []QuizSolvedInfo
 
 	q := fmt.Sprintf(`
 		select q.id, q.user_answer, q.type, q.created_at, q.starred, q.media, q.lesson, q.author
 		from %s as q
 		where q.product_id = (select id from %s where slug = $1 and user_id = $2) and user_id = $2	
-		order by q.created_at desc;
+		order by q.created_at desc
+		offset $3
+		fetch next $4 rows only;
 	`, SolvedQuizzesView, UsersProductsView)
 
-	err := r.db.SelectContext(ctx, &solvedQuizzes, q, productSlug, userId)
+	err := r.db.SelectContext(ctx, &solvedQuizzes, q, productSlug, userId, skip, limit)
 	if err != nil {
 		return make([]QuizSolvedInfo, 0), err
 	}
@@ -298,18 +302,19 @@ func (r *PostgresRepo) GetSolvedQuizzesForUser(ctx context.Context, productSlug 
 	return solvedQuizzes, nil
 }
 
-func (r *PostgresRepo) GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug string) ([]QuizSolvedInfo, error) {
+func (r *PostgresRepo) GetSolvedQuizzesForQuiz(ctx context.Context, quizSlug string, skip int, limit int) ([]QuizSolvedInfo, error) {
 	var solvedQuizzes []QuizSolvedInfo
 
 	q := fmt.Sprintf(`
 		select q.id, q.user_answer, q.type, q.created_at, q.starred, q.media, q.lesson, q.author
 		from %s as q
-		where q.quiz_id = (select id from %s where slug = $1)
-		
-		order by q.created_at desc;
+		where q.quiz_id = (select id from %s where slug = $1)		
+		order by q.created_at desc
+		offset $2
+		fetch next $3 rows only;
 	`, SolvedQuizzesView, QuizzesTable)
 
-	err := r.db.SelectContext(ctx, &solvedQuizzes, q, quizSlug)
+	err := r.db.SelectContext(ctx, &solvedQuizzes, q, quizSlug, skip, limit)
 	if err != nil {
 		return make([]QuizSolvedInfo, 0), err
 	}

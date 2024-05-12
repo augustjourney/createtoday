@@ -305,8 +305,10 @@ func (c *Controller) GetUserAccessibleLesson(ctx *fiber.Ctx) error {
 
 func (c *Controller) GetSolvedQuizzesForQuiz(ctx *fiber.Ctx) error {
 	slug := ctx.Params("slug")
+	skip := ctx.QueryInt("skip", 0)
+	limit := ctx.QueryInt("limit", 12)
 
-	solvedQuizzes, err := c.service.GetSolvedQuizzesForQuiz(context.Background(), slug)
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForQuiz(context.Background(), slug, skip, limit)
 	if err != nil {
 		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
 	}
@@ -317,8 +319,10 @@ func (c *Controller) GetSolvedQuizzesForQuiz(ctx *fiber.Ctx) error {
 func (c *Controller) GetSolvedQuizzesForProduct(ctx *fiber.Ctx) error {
 	slug := ctx.Params("slug")
 	user := ctx.Locals("user").(*User)
+	skip := ctx.QueryInt("skip", 0)
+	limit := ctx.QueryInt("limit", 12)
 
-	solvedQuizzes, err := c.service.GetSolvedQuizzesForProduct(context.Background(), slug, user.ID)
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForProduct(context.Background(), slug, user.ID, skip, limit)
 	if err != nil {
 		return common.DoApiResponse(ctx, http.StatusInternalServerError, solvedQuizzes, err)
 	}
@@ -329,8 +333,10 @@ func (c *Controller) GetSolvedQuizzesForProduct(ctx *fiber.Ctx) error {
 func (c *Controller) GetSolvedQuizzesForUser(ctx *fiber.Ctx) error {
 	slug := ctx.Params("slug")
 	user := ctx.Locals("user").(*User)
+	skip := ctx.QueryInt("skip", 0)
+	limit := ctx.QueryInt("limit", 12)
 
-	solvedQuizzes, err := c.service.GetSolvedQuizzesForUser(context.Background(), slug, user.ID)
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForUser(context.Background(), slug, user.ID, skip, limit)
 	if err != nil {
 		return common.DoApiResponse(ctx, http.StatusInternalServerError, solvedQuizzes, err)
 	}

@@ -32,12 +32,12 @@ func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
 	hero.Get("/courses", AuthMiddleware(service), controller.GetUserAccessibleProducts)
 	hero.Get("/courses/:slug/lessons", AuthMiddleware(service), controller.GetUserAccessibleProduct)
 	hero.Get("/courses/:slug/feed", AuthMiddleware(service), controller.GetSolvedQuizzesForProduct)
-	hero.Get("/courses/:slug/solved-quizzes", AuthMiddleware(service), controller.GetSolvedQuizzesForUser)
+	hero.Get("/courses/:slug/feed/personal", AuthMiddleware(service), controller.GetSolvedQuizzesForUser)
 	hero.Get("/courses/:courseSlug/lessons/:slug", AuthMiddleware(service), controller.GetUserAccessibleLesson)
 
-	hero.Get("/quizzes/:slug/solved", AuthMiddleware(service), controller.GetSolvedQuizzesForQuiz)
-	hero.Post("/quizzes/:slug/solved", AuthMiddleware(service), controller.SolveQuiz)
-	hero.Delete("/quizzes/:slug/solved", AuthMiddleware(service), controller.DeleteSolvedQuiz)
+	hero.Get("/courses/:courseSlug/lessons/:lessonSlug/quizzes/:slug/solved", AuthMiddleware(service), controller.GetSolvedQuizzesForQuiz)
+	hero.Post("/courses/:courseSlug/lessons/:lessonSlug/quizzes/:slug/solved", AuthMiddleware(service), controller.SolveQuiz)
+	hero.Delete("/courses/:courseSlug/lessons/:lessonSlug/quizzes/:slug/solved", AuthMiddleware(service), controller.DeleteSolvedQuiz)
 
 	return app
 }

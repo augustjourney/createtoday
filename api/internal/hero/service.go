@@ -37,9 +37,9 @@ type IService interface {
 	ChangeAvatar(ctx context.Context, userId int, avatarPath string, avatarFileName string) error
 	ChangePassword(ctx context.Context, userId int, password string) error
 
-	GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string) ([]QuizSolvedInfo, error)
-	GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error)
-	GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error)
+	GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string, skip int, limit int) ([]QuizSolvedInfo, error)
+	GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error)
+	GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error)
 	SolveQuiz(ctx context.Context, dto SolveQuizDTO) error
 	GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
 	DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error
@@ -199,8 +199,8 @@ func (s *Service) GetUserAccessibleLesson(ctx context.Context, lessonSlug string
 	return lesson, nil
 }
 
-func (s *Service) GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string) ([]QuizSolvedInfo, error) {
-	solvedQuizzes, err := s.repo.GetSolvedQuizzesForQuiz(ctx, lessonSlug)
+func (s *Service) GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string, skip int, limit int) ([]QuizSolvedInfo, error) {
+	solvedQuizzes, err := s.repo.GetSolvedQuizzesForQuiz(ctx, lessonSlug, skip, limit)
 	if err != nil {
 		logger.Log.Error(err.Error())
 		return solvedQuizzes, common.ErrInternalError
@@ -208,8 +208,8 @@ func (s *Service) GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string
 	return solvedQuizzes, nil
 }
 
-func (s *Service) GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error) {
-	solvedQuizzes, err := s.repo.GetSolvedQuizzesForProduct(ctx, productSlug, userId)
+func (s *Service) GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error) {
+	solvedQuizzes, err := s.repo.GetSolvedQuizzesForProduct(ctx, productSlug, userId, skip, limit)
 	if err != nil {
 		logger.Log.Error(err.Error())
 		return solvedQuizzes, common.ErrInternalError
@@ -217,8 +217,8 @@ func (s *Service) GetSolvedQuizzesForProduct(ctx context.Context, productSlug st
 	return solvedQuizzes, nil
 }
 
-func (s *Service) GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int) ([]QuizSolvedInfo, error) {
-	solvedQuizzes, err := s.repo.GetSolvedQuizzesForUser(ctx, productSlug, userId)
+func (s *Service) GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error) {
+	solvedQuizzes, err := s.repo.GetSolvedQuizzesForUser(ctx, productSlug, userId, skip, limit)
 	if err != nil {
 		logger.Log.Error(err.Error())
 		return solvedQuizzes, common.ErrInternalError

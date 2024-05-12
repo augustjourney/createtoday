@@ -1,5 +1,5 @@
 ### Login
-POST http://localhost:8080/hero/auth/login
+POST {{serverAddress}}/hero/auth/login
 Accept: application/json
 
 {
@@ -12,7 +12,7 @@ Accept: application/json
 %}
 
 ### Get Magic Link
-POST http://localhost:8080/hero/auth/login/get-magic-link
+POST {{serverAddress}}/hero/auth/login/get-magic-link
 Accept: application/json
 
 {
@@ -20,7 +20,7 @@ Accept: application/json
 }
 
 ### Validate Magic Link
-POST http://localhost:8080/hero/auth/login/validate-magic-link
+POST {{serverAddress}}/hero/auth/login/validate-magic-link
 Accept: application/json
 
 {
@@ -31,7 +31,7 @@ Accept: application/json
 %}
 
 ### Singup
-POST http://localhost:8080/hero/auth/signup
+POST {{serverAddress}}/hero/auth/signup
 Accept: application/json
 
 {
@@ -46,12 +46,12 @@ Accept: application/json
 
 
 ### Profile
-GET http://localhost:8080/hero/profile
+GET {{serverAddress}}/hero/profile
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
 ### Update Profile
-POST http://localhost:8080/hero/profile
+POST {{serverAddress}}/hero/profile
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
@@ -65,7 +65,7 @@ Authorization: Bearer {{auth_token}}
 }
 
 ### Update Password
-POST http://localhost:8080/hero/profile/password
+POST {{serverAddress}}/hero/profile/password
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
@@ -74,31 +74,41 @@ Authorization: Bearer {{auth_token}}
 }
 
 ### Courses
-GET http://localhost:8080/hero/courses
+GET {{serverAddress}}/hero/courses
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
 ### Course
-GET http://localhost:8080/hero/courses/c4899099-ab20-47c5-a63a-dd169c7f41b5/lessons
+GET {{serverAddress}}/hero/courses/{{courseSlug}}/lessons
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
 ### Course Feed
-GET http://localhost:8080/hero/courses/7874e571-4a61-410f-8602-0a7b793ce07b/feed
+GET {{serverAddress}}/hero/courses/{{courseSlug}}/feed?skip=0&limit=2
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
-### Solved Quizzes For User
-GET http://localhost:8080/hero/courses/7874e571-4a61-410f-8602-0a7b793ce07b/solved-quizzes
+### Course Personal Feed For User
+GET {{serverAddress}}/hero/courses/{{courseSlug}}/feed/personal?skip=0&limit=6
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
 ### Lesson
-GET http://localhost:8080/hero/courses/c4899099-ab20-47c5-a63a-dd169c7f41b5/lessons/360e9d9c-e3c5-448d-bf78-4ed7558b5575
+GET {{serverAddress}}/hero/courses/{{courseSlug}}/lessons/{{lessonSlug}}
 Accept: application/json
 Authorization: Bearer {{auth_token}}
 
 ### Lesson Solved Quizzes
-GET http://localhost:8080/hero/quizzes/081bbbda-e9e5-45fe-b85d-d8d76d8c9e79/solved
+GET {{serverAddress}}/hero/courses/{{courseSlug}}/lessons/{{lessonSlug}}/quizzes/{{quizSlug}}/solved?skip=0&limit=2
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Lesson Solve Quiz
+POST {{serverAddress}}/hero/courses/{{courseSlug}}/lessons/{{lessonSlug}}/quizzes/{{quizSlug}}/solved
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Delete Lesson Solved Quiz
+DELETE {{serverAddress}}/hero/courses/{{courseSlug}}/lessons/{{lessonSlug}}/quizzes/{{quizSlug}}/solved
 Accept: application/json
 Authorization: Bearer {{auth_token}}
