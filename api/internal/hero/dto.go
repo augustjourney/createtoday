@@ -78,3 +78,76 @@ type UpdateProfileBody struct {
 	About     *string `json:"about"`
 	Phone     *string `json:"phone"`
 }
+
+type UpdatePasswordBody struct {
+	Password string `json:"password"`
+}
+
+func (b *UpdatePasswordBody) Validate() error {
+	if b.Password == "" {
+		return common.ErrNewPasswordIsEmpty
+	}
+
+	if len(b.Password) < 8 {
+		return common.ErrNewPasswordIsShort
+	}
+
+	return nil
+}
+
+type SolveQuizBody struct {
+	Answer string `json:"answer"`
+	Type   string `json:"type"`
+	Media  []FileUpload
+	Slug   string
+}
+
+type FileUpload struct {
+	FileName  string `json:"file_name"`
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	FileURL   string `json:"file_url"`
+	Mime      string `json:"mime"`
+	MediaType string `json:"media_type"`
+}
+
+type FileUploadResult struct {
+	MediaId int64  `json:"media_id"`
+	FileURL string `json:"file_url"`
+}
+
+func (b *SolveQuizBody) Validate() error {
+	if b.Type == "" {
+		return common.ErrEmptyQuizType
+	}
+
+	if b.Type == "answer_quiz" && b.Answer == "" {
+		return common.ErrEmptyQuizAnswer
+	}
+
+	if len(b.Media) == 0 && b.Type == "one_photo" {
+		return common.ErrEmptyQuizPhoto
+	}
+
+	if len(b.Media) == 0 && b.Type == "one_video" {
+		return common.ErrEmptyQuizVideo
+	}
+
+	if b.Type == "one_photo" && len(b.Media) > 1 {
+		return common.ErrQuizTooManyPhotos
+	}
+
+	if b.Type == "one_video" && len(b.Media) > 1 {
+		return common.ErrQuizTooManyVideos
+	}
+
+	return nil
+}
+
+type SolveQuizDTO struct {
+	Answer   string
+	Type     string
+	UserID   int
+	QuizSlug string
+	Media    []FileUpload
+}

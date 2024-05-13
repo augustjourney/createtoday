@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gofiber/fiber/v2"
+	"mime/multipart"
 	"net/http"
 	"os"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type IController interface {
@@ -22,8 +24,16 @@ type IController interface {
 	// Products
 	GetUserAccessibleProducts(ctx *fiber.Ctx) error
 
+	// Lessons
+	CompleteLesson(ctx *fiber.Ctx) error
+
 	// Profile
 	GetProfile(ctx *fiber.Ctx) error
+	UpdatePassword(ctx *fiber.Ctx) error
+
+	// Quizzes
+	SolveQuiz(ctx *fiber.Ctx) error
+	DeleteSolvedQuiz(ctx *fiber.Ctx) error
 }
 
 type Controller struct {
@@ -200,6 +210,69 @@ func (c *Controller) UpdateProfile(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, http.StatusOK, "Профиль обновлен", nil)
 }
 
+func (c *Controller) ChangeAvatar(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	file := form.File["avatar"][0]
+
+	if file == nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, common.ErrEmptyAvatar)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+	}
+
+	avatarFileName := fmt.Sprintf("avatar_%d_%s", user.ID, file.Filename)
+	avatarPathToDir := fmt.Sprintf("%s/temp", wd)
+
+	err = ctx.SaveFile(file, avatarPathToDir+"/"+avatarFileName)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	err = c.service.ChangeAvatar(context.Background(), user.ID, avatarPathToDir, avatarFileName)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Аватар успешно загружен", nil)
+
+}
+
+func (c *Controller) UpdatePassword(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+	var body UpdatePasswordBody
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	err = body.Validate()
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	err = c.service.ChangePassword(context.Background(), user.ID, body.Password)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Новый пароль успешно сохранен", nil)
+}
+
 func (c *Controller) GetUserAccessibleProducts(ctx *fiber.Ctx) error {
 	user := ctx.Locals("user").(*User)
 	products, err := c.service.GetUserAccessibleProducts(context.Background(), user.ID)
@@ -233,6 +306,194 @@ func (c *Controller) GetUserAccessibleLesson(ctx *fiber.Ctx) error {
 		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
 	}
 	return common.DoApiResponse(ctx, http.StatusOK, lesson, nil)
+}
+
+func (c *Controller) CompleteLesson(ctx *fiber.Ctx) error {
+	user := ctx.Locals("user").(*User)
+	slug := ctx.Params("slug")
+	err := c.service.CompleteLesson(context.Background(), slug, user.ID)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+	return common.DoApiResponse(ctx, http.StatusOK, "Урок пройден", nil)
+}
+
+func (c *Controller) GetSolvedQuizzesForQuiz(ctx *fiber.Ctx) error {
+	slug := ctx.Params("slug")
+	skip := ctx.QueryInt("skip", 0)
+	limit := ctx.QueryInt("limit", 12)
+
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForQuiz(context.Background(), slug, skip, limit)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
+}
+
+func (c *Controller) GetSolvedQuizzesForProduct(ctx *fiber.Ctx) error {
+	slug := ctx.Params("slug")
+	user := ctx.Locals("user").(*User)
+	skip := ctx.QueryInt("skip", 0)
+	limit := ctx.QueryInt("limit", 12)
+
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForProduct(context.Background(), slug, user.ID, skip, limit)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, solvedQuizzes, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
+}
+
+func (c *Controller) GetSolvedQuizzesForUser(ctx *fiber.Ctx) error {
+	slug := ctx.Params("slug")
+	user := ctx.Locals("user").(*User)
+	skip := ctx.QueryInt("skip", 0)
+	limit := ctx.QueryInt("limit", 12)
+
+	solvedQuizzes, err := c.service.GetSolvedQuizzesForUser(context.Background(), slug, user.ID, skip, limit)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, solvedQuizzes, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
+}
+
+func (c *Controller) getMultiFormFiles(ctx context.Context, fiberCtx *fiber.Ctx, media []*multipart.FileHeader) ([]FileUpload, error) {
+	result := make([]FileUpload, 0)
+
+	if media == nil {
+		return result, nil
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, err
+	}
+
+	for _, file := range media {
+		filePath := fmt.Sprintf("%s/temp/%s", wd, file.Filename)
+
+		err = fiberCtx.SaveFile(file, filePath)
+		if err != nil {
+			logger.Log.Error(err.Error())
+			// Если не получилось сохранить хотя бы один файл
+			// То удаляем все предыдущие файлы и отдаем пустой слайс
+			c.removeUploadedLocalFiles(ctx, result)
+			result = make([]FileUpload, 0)
+			return result, err
+		}
+
+		mime := file.Header.Get("Content-Type")
+
+		result = append(result, FileUpload{
+			FileName:  file.Filename,
+			Size:      file.Size,
+			Path:      filePath,
+			Mime:      mime,
+			MediaType: GetMediaTypeFromMime(mime),
+		})
+	}
+
+	return result, nil
+}
+
+func (c *Controller) removeUploadedLocalFiles(ctx context.Context, files []FileUpload) {
+	for _, file := range files {
+		err := RemoveLocalFile(file.Path)
+		if err != nil {
+			logger.Log.Error("could not delete uploaded local file", "err", err, "file", file)
+		}
+	}
+}
+
+func (c *Controller) parseSolveQuizBody(ctx context.Context, fiberCtx *fiber.Ctx) (SolveQuizBody, error) {
+	var body SolveQuizBody
+	form, err := fiberCtx.MultipartForm()
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return body, err
+	}
+
+	body.Answer = form.Value["answer"][0]
+	body.Slug = fiberCtx.Params("slug")
+
+	quiz, err := c.service.GetQuizBySlug(ctx, body.Slug)
+
+	if err != nil && errors.Is(err, common.ErrQuizNotFound) {
+		return body, common.ErrQuizNotFound
+	}
+
+	if err != nil {
+		return body, common.ErrInternalError
+	}
+
+	body.Type = quiz.Type
+
+	media, err := c.getMultiFormFiles(ctx, fiberCtx, form.File["media"])
+
+	if err != nil {
+		return body, common.ErrInternalError
+	}
+
+	body.Media = media
+
+	return body, nil
+}
+
+func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
+
+	globalContext := context.Background()
+
+	body, err := c.parseSolveQuizBody(globalContext, ctx)
+	if err != nil && errors.Is(err, common.ErrInternalError) {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	defer c.removeUploadedLocalFiles(globalContext, body.Media)
+
+	err = body.Validate()
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+
+	err = c.service.SolveQuiz(globalContext, SolveQuizDTO{
+		Answer:   body.Answer,
+		UserID:   user.ID,
+		Type:     body.Type,
+		QuizSlug: body.Slug,
+		Media:    body.Media,
+	})
+
+	if err != nil && errors.Is(err, common.ErrQuizAlreadySolved) {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Задание успешно выполнено", nil)
+}
+
+func (c *Controller) DeleteSolvedQuiz(ctx *fiber.Ctx) error {
+
+	quizSlug := ctx.Params("slug")
+	user := ctx.Locals("user").(*User)
+
+	err := c.service.DeleteSolvedQuiz(context.Background(), quizSlug, user.ID)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, "Выполненное задание удалено", nil)
 }
 
 func NewController(service IService) *Controller {

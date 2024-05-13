@@ -1,15 +1,22 @@
 package hero
 
 import (
+	"bytes"
 	"context"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/logger"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
-	"golang.org/x/crypto/bcrypt"
+	"image/jpeg"
+	"os"
 	"time"
+
+	"github.com/disintegration/imaging"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type IService interface {
@@ -26,12 +33,31 @@ type IService interface {
 	GetUserAccessibleProduct(ctx context.Context, courseSlug string, userId int) (*ProductInfo, error)
 
 	GetUserAccessibleLesson(ctx context.Context, lessonSlug string, userId int) (*LessonInfo, error)
+	CompleteLesson(ctx context.Context, lessonSlug string, userId int) error
+
+	ChangeAvatar(ctx context.Context, userId int, avatarPath string, avatarFileName string) error
+	ChangePassword(ctx context.Context, userId int, password string) error
+
+	GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string, skip int, limit int) ([]QuizSolvedInfo, error)
+	GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error)
+	GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error)
+	SolveQuiz(ctx context.Context, dto SolveQuizDTO) error
+	GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
+	DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error
 }
 
 type Claims struct {
 	jwt.RegisteredClaims
 	UserID int `json:"user_id"`
 }
+
+const (
+	MediaStatusUploaded = "uploaded"
+)
+
+const (
+	RelatedMediaTypeSolvedQuiz = "solved_quiz"
+)
 
 type Service struct {
 	repo   Storage
@@ -55,6 +81,69 @@ func (s *Service) UpdateProfile(ctx context.Context, userId int, profile UpdateP
 
 	if err != nil {
 		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) ChangeAvatar(ctx context.Context, userId int, avatarPathToDir string, avatarFileName string) error {
+	defer func() {
+		err := RemoveLocalFile(avatarPathToDir + "/" + avatarFileName)
+		if err != nil {
+			logger.Log.Error(err.Error(), "error", err)
+		}
+	}()
+
+	src, err := imaging.Open(avatarPathToDir + "/" + avatarFileName)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	fileName := fmt.Sprintf("avatar_for_user_%d", userId)
+	newAvatarFileName := MakeFileHashName(fileName, "jpeg")
+
+	buff := new(bytes.Buffer)
+
+	size := src.Bounds().Size()
+
+	if size.X > 300 {
+		src = imaging.Resize(src, 300, 0, imaging.Lanczos)
+	}
+
+	err = jpeg.Encode(buff, src, nil)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	fileUrl, err := UploadFileToS3(s.config.PhotosBucket, newAvatarFileName, bytes.NewReader(buff.Bytes()), s.config)
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	err = s.repo.UpdateAvatar(ctx, userId, fileUrl)
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) ChangePassword(ctx context.Context, userId int, password string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	err = s.repo.UpdatePassword(ctx, userId, string(hashedPassword))
+	if err != nil {
+		logger.Log.Error(err.Error())
 		return common.ErrInternalError
 	}
 
@@ -117,6 +206,253 @@ func (s *Service) GetUserAccessibleLesson(ctx context.Context, lessonSlug string
 	}
 
 	return lesson, nil
+}
+
+func (s *Service) CompleteLesson(ctx context.Context, lessonSlug string, userId int) error {
+	err := s.repo.CompleteLesson(ctx, lessonSlug, userId)
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+	return nil
+}
+
+func (s *Service) GetSolvedQuizzesForQuiz(ctx context.Context, lessonSlug string, skip int, limit int) ([]QuizSolvedInfo, error) {
+	solvedQuizzes, err := s.repo.GetSolvedQuizzesForQuiz(ctx, lessonSlug, skip, limit)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return solvedQuizzes, common.ErrInternalError
+	}
+	return solvedQuizzes, nil
+}
+
+func (s *Service) GetSolvedQuizzesForProduct(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error) {
+	solvedQuizzes, err := s.repo.GetSolvedQuizzesForProduct(ctx, productSlug, userId, skip, limit)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return solvedQuizzes, common.ErrInternalError
+	}
+	return solvedQuizzes, nil
+}
+
+func (s *Service) GetSolvedQuizzesForUser(ctx context.Context, productSlug string, userId int, skip int, limit int) ([]QuizSolvedInfo, error) {
+	solvedQuizzes, err := s.repo.GetSolvedQuizzesForUser(ctx, productSlug, userId, skip, limit)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return solvedQuizzes, common.ErrInternalError
+	}
+	return solvedQuizzes, nil
+}
+
+func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
+
+	solvedQuiz, err := s.repo.FindSolvedQuiz(ctx, dto.UserID, dto.QuizSlug)
+
+	if err != nil && !errors.Is(err, common.ErrSolvedQuizNotFound) {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	if solvedQuiz != nil {
+		return common.ErrQuizAlreadySolved
+	}
+
+	var savedMediaIds []int64
+
+	// Загружаем медиа у выполненного квиза, если они есть
+	for _, file := range dto.Media {
+		if file.MediaType == "image" {
+			res, err := s.createImageMediaFromLocalFile(ctx, file)
+			if err != nil {
+				logger.Log.Error(err.Error())
+				continue
+			}
+			savedMediaIds = append(savedMediaIds, res.MediaId)
+		} else if file.MediaType == "video" {
+			res, err := s.createVideoMediaFromLocalFile(ctx, file)
+			if err != nil {
+				logger.Log.Error(err.Error())
+				continue
+			}
+			savedMediaIds = append(savedMediaIds, res.MediaId)
+		} else {
+			logger.Log.Error("unknown media type", "mediaType", file.MediaType)
+		}
+	}
+
+	// Сохраняем выполненный квиз
+	answerJson, err := json.Marshal(QuizSolvedAnswer{Answer: dto.Answer})
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	solvedQuizId, err := s.repo.SolveQuiz(ctx, dto.QuizSlug, dto.UserID, answerJson)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	// Привязываем медиа к выполненному квизу
+	if len(savedMediaIds) > 0 {
+		err = s.repo.ConnectManyMedia(ctx, savedMediaIds, RelatedMediaTypeSolvedQuiz, solvedQuizId)
+		if err != nil {
+			logger.Log.Error(err.Error(), "mediaIds", savedMediaIds, "solvedQuizId", solvedQuizId)
+			return common.ErrInternalError
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error {
+	solvedQuiz, err := s.repo.FindSolvedQuiz(ctx, userId, quizSlug)
+	if err != nil {
+		if errors.Is(err, common.ErrSolvedQuizNotFound) {
+			return nil
+		}
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+	err = s.repo.DeleteSolvedQuiz(ctx, solvedQuiz.ID, userId)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+	return nil
+}
+
+func (s *Service) createVideoMediaFromLocalFile(ctx context.Context, file FileUpload) (FileUploadResult, error) {
+	var result FileUploadResult
+
+	f, err := os.Open(file.Path)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	slug := uuid.New().String()
+	ext := GetExtensionFromFileName(file.FileName)
+
+	fileName := slug + "." + ext
+	bucket := s.config.VideosBucket
+
+	fileUrl, err := UploadFileToS3(bucket, fileName, f, s.config)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	media := Media{
+		Slug:    slug,
+		URL:     fileUrl,
+		Size:    &file.Size,
+		Name:    fileName,
+		Ext:     ext,
+		Mime:    file.Mime,
+		Bucket:  bucket,
+		Storage: s.config.S3Provider,
+		Type:    file.MediaType,
+		Status:  MediaStatusUploaded,
+	}
+
+	mediaId, err := s.repo.SaveMedia(ctx, media)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "fileUrl", fileUrl)
+		return result, common.ErrInternalError
+	}
+
+	logger.Log.Info("uploaded file url", "fileUrl", fileUrl)
+
+	result.FileURL = fileUrl
+	result.MediaId = mediaId
+
+	return result, nil
+}
+
+func (s *Service) createImageMediaFromLocalFile(ctx context.Context, file FileUpload) (FileUploadResult, error) {
+	src, err := imaging.Open(file.Path)
+
+	var result FileUploadResult
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	slug := uuid.New().String()
+	ext := "jpeg"
+	mime := "image/jpeg"
+
+	fileName := slug + "." + ext
+
+	buff := new(bytes.Buffer)
+
+	// Конвертация изображения в jpeg
+	err = jpeg.Encode(buff, src, nil)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	// Загрузка в S3
+	bucket := s.config.PhotosBucket
+	fileUrl, err := UploadFileToS3(bucket, fileName, bytes.NewReader(buff.Bytes()), s.config)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return result, common.ErrInternalError
+	}
+
+	// Получение размеров изображения
+	dimensions := src.Bounds().Size()
+
+	// Сохранение медиа в БД
+	media := Media{
+		Slug:    slug,
+		URL:     fileUrl,
+		Width:   &dimensions.X,
+		Height:  &dimensions.Y,
+		Size:    &file.Size,
+		Name:    fileName,
+		Ext:     ext,
+		Mime:    mime,
+		Bucket:  bucket,
+		Storage: s.config.S3Provider,
+		Type:    file.MediaType,
+		Status:  MediaStatusUploaded,
+	}
+
+	mediaId, err := s.repo.SaveMedia(ctx, media)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "fileUrl", fileUrl)
+		return result, common.ErrInternalError
+	}
+
+	logger.Log.Info("uploaded file url", "fileUrl", fileUrl)
+
+	result.FileURL = fileUrl
+	result.MediaId = mediaId
+
+	return result, nil
+}
+
+func (s *Service) GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error) {
+	quiz, err := s.repo.GetQuizBySlug(ctx, slug)
+
+	if errors.Is(err, common.ErrQuizNotFound) {
+		return nil, common.ErrQuizNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	return quiz, nil
 }
 
 func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {

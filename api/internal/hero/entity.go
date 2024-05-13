@@ -1,7 +1,9 @@
 package hero
 
 import (
+	"database/sql"
 	"encoding/json"
+	"time"
 )
 
 type Lesson struct {
@@ -110,4 +112,164 @@ type LessonInfo struct {
 	Settings    *json.RawMessage `json:"settings" db:"settings"`
 	IsPublic    bool             `json:"-" db:"is_public"`
 	Product     json.RawMessage  `json:"product" db:"product"`
+	Quizzes     json.RawMessage  `json:"quizzes" db:"quizzes"`
+	Media       json.RawMessage  `json:"media" db:"media"`
+	NextLesson  *string          `json:"next_lesson" db:"next_lesson"`
+}
+
+type LessonContent struct {
+	Elements []LessonElement `json:"elements"`
+}
+
+type LessonElement struct {
+	ID   string      `json:"id" db:"id"`
+	Type string      `json:"type" db:"type"`
+	Body interface{} `json:"body" db:"body"`
+}
+
+type LessonElementGallery struct {
+	Media []struct {
+		MediaId int `json:"media_id"`
+		MediaInfo
+	} `json:"media"`
+	Settings struct {
+		View string `json:"view"`
+	} `json:"settings"`
+}
+
+type LessonElementQuiz struct {
+	QuizId int `json:"quiz_id"`
+	QuizInfo
+}
+
+type LessonElementGif struct {
+	Media struct {
+		MediaId int `json:"media_id"`
+		MediaInfo
+	} `json:"media"`
+	Settings *json.RawMessage `json:"settings"`
+}
+
+type LessonElementAudio struct {
+	Media struct {
+		MediaId int `json:"media_id"`
+		MediaInfo
+	} `json:"media"`
+	Settings *json.RawMessage `json:"settings"`
+}
+
+type Quiz struct {
+	ID                int             `json:"id" db:"id"`
+	Name              sql.NullString  `json:"name" db:"name"`
+	Slug              string          `json:"slug" db:"slug"`
+	Content           json.RawMessage `json:"content" db:"content"`
+	Type              string          `json:"type" db:"type"`
+	Settings          json.RawMessage `json:"settings" db:"settings"`
+	ShowOthersAnswers bool            `json:"show_others_answers" db:"show_others_answers"`
+	LessonID          int             `json:"lesson_id" db:"lesson_id"`
+	CreatedBy         *int            `json:"created_by" db:"created_by"`
+	CreatedAt         time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at" db:"updated_at"`
+	ProjectID         int             `json:"project_id" db:"project_id"`
+	ProductID         int             `json:"product_id" db:"product_id"`
+}
+
+type QuizContent struct {
+	Caption string `json:"caption" db:"caption"`
+}
+
+type QuizSettings struct {
+	StopBlock bool `json:"stop_block" db:"stop_block"`
+}
+
+// Как используется в уроке
+type QuizInfo struct {
+	Slug              string       `json:"slug" db:"slug"`
+	Content           QuizContent  `json:"content" db:"content"`
+	Type              string       `json:"type" db:"type"`
+	Settings          QuizSettings `json:"settings" db:"settings"`
+	ShowOthersAnswers bool         `json:"show_others_answers" db:"show_others_answers"`
+}
+
+type Media struct {
+	ID        int             `json:"id" db:"id"`
+	Name      string          `json:"name" db:"name"`
+	Type      string          `json:"type" db:"type"`
+	Slug      string          `json:"slug" db:"slug"`
+	Mime      string          `json:"mime" db:"mime"`
+	Ext       string          `json:"ext" db:"ext"`
+	Size      *int64          `json:"size" db:"size"`
+	Width     *int            `json:"width" db:"width"`
+	Height    *int            `json:"height" db:"height"`
+	URL       string          `json:"url" db:"url"`
+	Sources   json.RawMessage `json:"sources" db:"sources"`
+	Blurhash  json.RawMessage `json:"blurhash" db:"blurhash"`
+	ParentID  *int            `json:"parent_id" db:"parent_id"`
+	Storage   string          `json:"storage" db:"storage"`
+	Duration  *int            `json:"duration" db:"duration"`
+	Bucket    string          `json:"bucket" db:"bucket"`
+	Status    string          `json:"status" db:"status"`
+	Caption   *string         `json:"caption" db:"caption"`
+	Original  bool            `json:"original" db:"original"`
+	CreatedAt time.Time       `json:"created_at" db:"created_at"`
+}
+
+type MediaSource struct {
+	Mime   string `json:"mime" db:"mime"`
+	Width  int    `json:"width" db:"width"`
+	Height int    `json:"height" db:"height"`
+	Image  string `json:"image" db:"image"` // image name
+	Url    string `json:"url" db:"url"`
+}
+
+// Как используется в уроках и выполненных квизах
+type MediaInfo struct {
+	Type    string        `json:"type" db:"type"`
+	Url     string        `json:"url" db:"url"`
+	Sources []MediaSource `json:"sources" db:"sources"`
+}
+
+type QuizSolved struct {
+	ID         int64           `json:"id" db:"id"`
+	UserID     int             `json:"user_id" db:"user_id"`
+	QuizID     int             `json:"quiz_id" db:"quiz_id"`
+	ProductID  int             `json:"product_id" db:"product_id"`
+	LessonID   int             `json:"lesson_id" db:"lesson_id"`
+	ProjectID  int             `json:"project_id" db:"project_id"`
+	UserAnswer json.RawMessage `json:"user_answer" db:"user_answer"`
+	Type       string          `json:"type" db:"type"`
+	Starred    bool            `json:"starred" db:"starred"`
+	IsDeleted  bool            `json:"is_deleted" db:"is_deleted"`
+	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at" db:"updated_at"`
+}
+
+type QuizSolvedAnswer struct {
+	Answer string `json:"answer" db:"answer"`
+}
+
+type QuizSolvedInfo struct {
+	ID         int              `json:"id" db:"id"`
+	UserAnswer json.RawMessage  `json:"user_answer" db:"user_answer"`
+	Type       string           `json:"type" db:"type"`
+	Starred    bool             `json:"starred" db:"starred"`
+	CreatedAt  time.Time        `json:"created_at" db:"created_at"`
+	Media      *json.RawMessage `json:"media" db:"media"`
+	Lesson     json.RawMessage  `json:"lesson" db:"lesson"`
+	Author     json.RawMessage  `json:"author" db:"author"`
+}
+
+type QuizSolvedAuthor struct {
+	FirstName string `json:"first_name" db:"first_name"`
+	LastName  string `json:"last_name" db:"last_name"`
+	Avatar    string `json:"avatar" db:"avatar"`
+}
+
+type QuizSolvedLesson struct {
+	Name    string `json:"name" db:"name"`
+	Slug    string `json:"slug" db:"slug"`
+	Product struct {
+		Name string `json:"name" db:"name"`
+		Slug string `json:"slug" db:"slug"`
+	} `json:"product" db:"product"`
 }

@@ -3,9 +3,10 @@ package config
 import (
 	"createtodayapi/internal/logger"
 	"flag"
-	"github.com/joho/godotenv"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -23,6 +24,14 @@ type Config struct {
 	AwsAccessKeyId     string `env:"AWS_ACCESS_KEY_ID"`
 	AwsRegion          string `env:"AWS_REGION"`
 	Env                string `env:"ENV"` // dev, stage, prod
+	S3Endpoint         string `env:"S3_ENDPOINT"`
+	S3Region           string `env:"S3_REGION"`
+	S3AccessKeyId      string `env:"S3_ACCESS_KEY_ID"`
+	S3SecretAccessKey  string `env:"S3_SECRET_ACCESS_KEY"`
+	CdnUrl             string `env:"CDN_URL"`
+	PhotosBucket       string `env:"PHOTOS_BUCKET"`
+	VideosBucket       string `env:"VIDEOS_BUCKET"`
+	S3Provider         string `env:"S3_PROVIDER"`
 }
 
 var config Config
@@ -43,6 +52,11 @@ func New() *Config {
 	config.MagicLinkExp = time.Minute * 1
 	config.ServerAddress = *flagServerAddress
 	config.Env = "dev"
+	config.S3Endpoint = "https://s3.storage.selcloud.ru"
+	config.S3Region = "ru-1a"
+	config.PhotosBucket = "photos"
+	config.VideosBucket = "videos"
+	config.S3Provider = "selectel"
 
 	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
 		config.DatabaseDSN = databaseDSN
@@ -78,6 +92,22 @@ func New() *Config {
 
 	if AwsRegion := os.Getenv("AWS_REGION"); AwsRegion != "" {
 		config.AwsRegion = AwsRegion
+	}
+
+	if S3AccessKeyId := os.Getenv("S3_ACCESS_KEY_ID"); S3AccessKeyId != "" {
+		config.S3AccessKeyId = S3AccessKeyId
+	}
+
+	if S3SecretAccessKey := os.Getenv("S3_SECRET_ACCESS_KEY"); S3SecretAccessKey != "" {
+		config.S3SecretAccessKey = S3SecretAccessKey
+	}
+
+	if CdnUrl := os.Getenv("CDN_URL"); CdnUrl != "" {
+		config.CdnUrl = CdnUrl
+	}
+
+	if PhotosBucket := os.Getenv("PHOTOS_BUCKET"); PhotosBucket != "" {
+		config.PhotosBucket = PhotosBucket
 	}
 
 	return &config
