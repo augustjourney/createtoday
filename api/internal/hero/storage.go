@@ -40,4 +40,7 @@ type Storage interface {
 	ConnectManyMedia(ctx context.Context, mediaIds []int64, relatedType string, relatedId int64) error
 	DeleteMedia(ctx context.Context, mediaId int64) error
 	UpdateMediaStatus(ctx context.Context, mediaId int64, status string) error
+
+	// offers
+	FindOfferBySlug(ctx context.Context, slug string) (*OfferForProcessing, error)
 }

@@ -45,3 +45,6 @@ var ErrQuizTooManyVideos = errors.New("Загрузить можно тольк�
 var ErrQuizAlreadySolved = errors.New("Вы уже выполнили это задание")
 var ErrSolvedQuizNotFound = errors.New("Не найден такой выполненный квиз")
 var ErrQuizNotFound = errors.New("Квиз не найден")
+
+// offers
+var ErrOfferNotFound = errors.New("Такой оффер не найден")

@@ -27,6 +27,8 @@ const RelatedMediaTable = "public.related_media"
 const SolvedQuizzesTable = "public.quiz_solved"
 const SolvedQuizzesView = "public._solvedquizzes"
 const CompletedLessonsTable = "public.completed_lessons"
+const OffersTable = "public.offer"
+const PayIntegrationsTable = "public.pay_integration"
 
 type PostgresRepo struct {
 	db *sqlx.DB
@@ -570,6 +572,30 @@ func (r *PostgresRepo) DeleteSolvedQuiz(ctx context.Context, solvedQuizId int64,
 	}
 
 	return nil
+}
+
+func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*OfferForProcessing, error) {
+	q := fmt.Sprintf(`
+		SELECT id, name, slug, price, is_free, description, ask_for_phone, ask_for_comment, currency, settings, 
+		       oferta_url, agreement_url, privacy_url, project_id, can_use_promocode, 
+		       ask_for_telegram, ask_for_instagram, is_donate, min_donate_price
+		FROM %s
+		WHERE slug = $1; 
+	`, OffersTable)
+
+	var offer OfferForProcessing
+
+	err := r.db.GetContext(ctx, &offer, q, slug)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, common.ErrOfferNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.FindOfferBySlug")
+		return nil, err
+	}
+
+	return &offer, nil
 }
 
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {

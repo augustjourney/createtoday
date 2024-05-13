@@ -275,39 +275,61 @@ type QuizSolvedLesson struct {
 }
 
 type Offer struct {
-	ID                     int             `db:"id"`
-	Name                   string          `db:"name"`
-	Description            *string         `db:"description"`
-	Slug                   string          `db:"slug"`
-	Price                  int             `db:"price"`
-	Currency               string          `db:"currency"`
-	IsFree                 bool            `db:"is_free"`
-	SendOrderCreated       bool            `db:"send_order_created"`
-	SendOrderCompleted     bool            `db:"send_order_completed"`
-	SendRegistrationEmail  bool            `db:"send_registration_email"`
-	RegistrationEmail      *string         `db:"registration_email"`
-	AddToNewsletter        bool            `db:"add_to_newsletter"`
-	Type                   string          `db:"type"`
-	Settings               json.RawMessage `db:"settings"`
-	ProjectID              int             `db:"project_id"`
-	CreatedAt              time.Time       `db:"created_at"`
-	UpdatedAt              time.Time       `db:"updated_at"`
-	RegistrationEmailTheme *string         `db:"registration_email_theme"`
-	SuccessMessage         *string         `db:"success_message"`
-	RedirectURL            *string         `db:"redirect_url"`
-	AskForPhone            bool            `db:"ask_for_phone"`
-	AskForComment          bool            `db:"ask_for_comment"`
-	OfertaURL              *string         `db:"oferta_url"`
-	AgreementURL           *string         `db:"agreement_url"`
-	PrivacyURL             *string         `db:"privacy_url"`
-	SendWelcomeEmail       bool            `db:"send_welcome_email"`
-	AskForTelegram         bool            `db:"ask_for_telegram"`
-	AskForInstagram        bool            `db:"ask_for_instagram"`
-	CanUsePromocode        bool            `db:"can_use_promocode"`
-	IsDonate               bool            `db:"is_donate"`
-	MinDonatePrice         int             `db:"min_donate_price"`
-	SendToSalebot          bool            `db:"send_to_salebot"`
-	SalebotCallbackText    *string         `db:"salebot_callback_text"`
+	ID                     int              `db:"id"`
+	Name                   string           `db:"name"`
+	Description            *string          `db:"description"`
+	Slug                   string           `db:"slug"`
+	Price                  int              `db:"price"`
+	Currency               string           `db:"currency"`
+	IsFree                 bool             `db:"is_free"`
+	SendOrderCreated       bool             `db:"send_order_created"`
+	SendOrderCompleted     bool             `db:"send_order_completed"`
+	SendRegistrationEmail  bool             `db:"send_registration_email"`
+	RegistrationEmail      *string          `db:"registration_email"`
+	AddToNewsletter        bool             `db:"add_to_newsletter"`
+	Type                   string           `db:"type"`
+	Settings               *json.RawMessage `db:"settings"`
+	ProjectID              int              `db:"project_id"`
+	CreatedAt              time.Time        `db:"created_at"`
+	UpdatedAt              time.Time        `db:"updated_at"`
+	RegistrationEmailTheme *string          `db:"registration_email_theme"`
+	SuccessMessage         *string          `db:"success_message"`
+	RedirectURL            *string          `db:"redirect_url"`
+	AskForPhone            bool             `db:"ask_for_phone"`
+	AskForComment          bool             `db:"ask_for_comment"`
+	OfertaURL              *string          `db:"oferta_url"`
+	AgreementURL           *string          `db:"agreement_url"`
+	PrivacyURL             *string          `db:"privacy_url"`
+	SendWelcomeEmail       bool             `db:"send_welcome_email"`
+	AskForTelegram         bool             `db:"ask_for_telegram"`
+	AskForInstagram        bool             `db:"ask_for_instagram"`
+	CanUsePromocode        bool             `db:"can_use_promocode"`
+	IsDonate               bool             `db:"is_donate"`
+	MinDonatePrice         int              `db:"min_donate_price"`
+	SendToSalebot          bool             `db:"send_to_salebot"`
+	SalebotCallbackText    *string          `db:"salebot_callback_text"`
+}
+
+type OfferForProcessing struct {
+	ID              int              `db:"id" json:"id"`
+	Name            string           `db:"name" json:"name"`
+	Description     *string          `db:"description" json:"description"`
+	Slug            string           `db:"slug" json:"slug"`
+	Price           int              `db:"price" json:"price"`
+	Currency        string           `db:"currency" json:"currency"`
+	IsFree          bool             `db:"is_free" json:"is_free"`
+	Settings        *json.RawMessage `db:"settings" json:"settings"`
+	ProjectID       int              `db:"project_id" json:"project_id"`
+	AskForPhone     bool             `db:"ask_for_phone" json:"ask_for_phone"`
+	AskForComment   bool             `db:"ask_for_comment" json:"ask_for_comment"`
+	OfertaURL       *string          `db:"oferta_url" json:"oferta_url"`
+	AgreementURL    *string          `db:"agreement_url" json:"agreement_url"`
+	PrivacyURL      *string          `db:"privacy_url" json:"privacy_url"`
+	AskForTelegram  bool             `db:"ask_for_telegram" json:"ask_for_telegram"`
+	AskForInstagram bool             `db:"ask_for_instagram" json:"ask_for_instagram"`
+	CanUsePromocode bool             `db:"can_use_promocode" json:"can_use_promocode"`
+	IsDonate        bool             `db:"is_donate" json:"is_donate"`
+	MinDonatePrice  int              `db:"min_donate_price" json:"min_donate_price"`
 }
 
 type PayIntegration struct {
