@@ -26,6 +26,11 @@ func UploadFileToS3(bucket string, fileName string, fileBytes io.ReadSeeker, con
 			"",
 		),
 	})
+	if err != nil {
+		logger.Log.Error("could not create session in aws sdk", "err", err)
+		return "", err
+	}
+
 	svc := s3.New(sess)
 
 	_, err = svc.PutObject(&s3.PutObjectInput{
@@ -35,6 +40,7 @@ func UploadFileToS3(bucket string, fileName string, fileBytes io.ReadSeeker, con
 	})
 
 	if err != nil {
+		logger.Log.Error("could not upload file to s3", "err", err, "fileName", fileName, "bucket", bucket)
 		return "", err
 	}
 
