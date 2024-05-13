@@ -51,6 +51,14 @@ type Claims struct {
 	UserID int `json:"user_id"`
 }
 
+const (
+	MediaStatusUploaded = "uploaded"
+)
+
+const (
+	RelatedMediaTypeSolvedQuiz = "solved_quiz"
+)
+
 type Service struct {
 	repo   Storage
 	config *config.Config
@@ -287,7 +295,7 @@ func (s *Service) SolveQuiz(ctx context.Context, dto SolveQuizDTO) error {
 
 	// Привязываем медиа к выполненному квизу
 	if len(savedMediaIds) > 0 {
-		err = s.repo.ConnectManyMedia(ctx, savedMediaIds, "solved_quiz", solvedQuizId)
+		err = s.repo.ConnectManyMedia(ctx, savedMediaIds, RelatedMediaTypeSolvedQuiz, solvedQuizId)
 		if err != nil {
 			logger.Log.Error(err.Error(), "mediaIds", savedMediaIds, "solvedQuizId", solvedQuizId)
 			return common.ErrInternalError
@@ -346,7 +354,7 @@ func (s *Service) createVideoMediaFromLocalFile(ctx context.Context, file FileUp
 		Bucket:  bucket,
 		Storage: s.config.S3Provider,
 		Type:    file.MediaType,
-		Status:  "uploaded",
+		Status:  MediaStatusUploaded,
 	}
 
 	mediaId, err := s.repo.SaveMedia(ctx, media)
@@ -414,7 +422,7 @@ func (s *Service) createImageMediaFromLocalFile(ctx context.Context, file FileUp
 		Bucket:  bucket,
 		Storage: s.config.S3Provider,
 		Type:    file.MediaType,
-		Status:  "uploaded",
+		Status:  MediaStatusUploaded,
 	}
 
 	mediaId, err := s.repo.SaveMedia(ctx, media)
