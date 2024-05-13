@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gofiber/fiber/v2"
+	"mime/multipart"
 	"net/http"
 	"os"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type IController interface {
@@ -357,86 +359,116 @@ func (c *Controller) GetSolvedQuizzesForUser(ctx *fiber.Ctx) error {
 	return common.DoApiResponse(ctx, http.StatusOK, solvedQuizzes, nil)
 }
 
-func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
-	var body SolveQuizBody
+func (c *Controller) getMultiFormFiles(ctx context.Context, fiberCtx *fiber.Ctx, media []*multipart.FileHeader) ([]FileUpload, error) {
+	result := make([]FileUpload, 0)
 
-	form, err := ctx.MultipartForm()
+	if media == nil {
+		return result, nil
+	}
+
+	wd, err := os.Getwd()
 	if err != nil {
 		logger.Log.Error(err.Error())
-		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+		return result, err
 	}
 
-	globalContext := context.Background()
+	for _, file := range media {
+		filePath := fmt.Sprintf("%s/temp/%s", wd, file.Filename)
 
-	slug := ctx.Params("slug")
-	user := ctx.Locals("user").(*User)
+		err = fiberCtx.SaveFile(file, filePath)
+		if err != nil {
+			logger.Log.Error(err.Error())
+			// Если не получилось сохранить хотя бы один файл
+			// То удаляем все предыдущие файлы и отдаем пустой слайс
+			c.removeUploadedLocalFiles(ctx, result)
+			result = make([]FileUpload, 0)
+			return result, err
+		}
 
-	quiz, err := c.service.GetQuizBySlug(globalContext, slug)
+		mime := file.Header.Get("Content-Type")
+
+		result = append(result, FileUpload{
+			FileName:  file.Filename,
+			Size:      file.Size,
+			Path:      filePath,
+			Mime:      mime,
+			MediaType: GetMediaTypeFromMime(mime),
+		})
+	}
+
+	return result, nil
+}
+
+func (c *Controller) removeUploadedLocalFiles(ctx context.Context, files []FileUpload) {
+	for _, file := range files {
+		err := RemoveLocalFile(file.Path)
+		if err != nil {
+			logger.Log.Error("could not delete uploaded local file", "err", err, "file", file)
+		}
+	}
+}
+
+func (c *Controller) parseSolveQuizBody(ctx context.Context, fiberCtx *fiber.Ctx) (SolveQuizBody, error) {
+	var body SolveQuizBody
+	form, err := fiberCtx.MultipartForm()
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return body, err
+	}
+
+	body.Answer = form.Value["answer"][0]
+	body.Slug = fiberCtx.Params("slug")
+
+	quiz, err := c.service.GetQuizBySlug(ctx, body.Slug)
+
+	if err != nil && errors.Is(err, common.ErrQuizNotFound) {
+		return body, common.ErrQuizNotFound
+	}
 
 	if err != nil {
-		if errors.Is(err, common.ErrQuizNotFound) {
-			return common.DoApiResponse(ctx, http.StatusBadRequest, nil, common.ErrQuizNotFound)
-		}
-		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
-	}
-
-	if quiz == nil {
-		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, common.ErrQuizNotFound)
+		return body, common.ErrInternalError
 	}
 
 	body.Type = quiz.Type
-	body.Answer = form.Value["answer"][0]
 
-	media := form.File["media"]
+	media, err := c.getMultiFormFiles(ctx, fiberCtx, form.File["media"])
 
-	defer func() {
-		if len(body.Media) == 0 {
-			return
-		}
-
-		for _, m := range body.Media {
-			_ = RemoveLocalFile(m.Path)
-		}
-	}()
-
-	if media != nil {
-		wd, err := os.Getwd()
-		if err != nil {
-			logger.Log.Error(err.Error())
-			return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
-		}
-
-		for _, file := range media {
-			filePath := fmt.Sprintf("%s/temp/%s", wd, file.Filename)
-
-			err = ctx.SaveFile(file, filePath)
-			if err != nil {
-				logger.Log.Error(err.Error())
-				return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
-			}
-
-			mime := file.Header.Get("Content-Type")
-
-			body.Media = append(body.Media, FileUpload{
-				FileName:  file.Filename,
-				Size:      file.Size,
-				Path:      filePath,
-				Mime:      mime,
-				MediaType: GetMediaTypeFromMime(mime),
-			})
-		}
+	if err != nil {
+		return body, common.ErrInternalError
 	}
+
+	body.Media = media
+
+	return body, nil
+}
+
+func (c *Controller) SolveQuiz(ctx *fiber.Ctx) error {
+
+	globalContext := context.Background()
+
+	body, err := c.parseSolveQuizBody(globalContext, ctx)
+	if err != nil && errors.Is(err, common.ErrInternalError) {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	defer c.removeUploadedLocalFiles(globalContext, body.Media)
 
 	err = body.Validate()
 	if err != nil {
 		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
 	}
 
+	user := ctx.Locals("user").(*User)
+
 	err = c.service.SolveQuiz(globalContext, SolveQuizDTO{
 		Answer:   body.Answer,
 		UserID:   user.ID,
 		Type:     body.Type,
-		QuizSlug: slug,
+		QuizSlug: body.Slug,
 		Media:    body.Media,
 	})
 

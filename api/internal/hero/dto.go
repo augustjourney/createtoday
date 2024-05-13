@@ -99,6 +99,7 @@ type SolveQuizBody struct {
 	Answer string `json:"answer"`
 	Type   string `json:"type"`
 	Media  []FileUpload
+	Slug   string
 }
 
 type FileUpload struct {
