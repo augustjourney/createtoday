@@ -311,7 +311,6 @@ type Offer struct {
 }
 
 type OfferForProcessing struct {
-	ID              int              `db:"id" json:"id"`
 	Name            string           `db:"name" json:"name"`
 	Description     *string          `db:"description" json:"description"`
 	Slug            string           `db:"slug" json:"slug"`
@@ -319,7 +318,6 @@ type OfferForProcessing struct {
 	Currency        string           `db:"currency" json:"currency"`
 	IsFree          bool             `db:"is_free" json:"is_free"`
 	Settings        *json.RawMessage `db:"settings" json:"settings"`
-	ProjectID       int              `db:"project_id" json:"project_id"`
 	AskForPhone     bool             `db:"ask_for_phone" json:"ask_for_phone"`
 	AskForComment   bool             `db:"ask_for_comment" json:"ask_for_comment"`
 	OfertaURL       *string          `db:"oferta_url" json:"oferta_url"`
@@ -330,10 +328,12 @@ type OfferForProcessing struct {
 	CanUsePromocode bool             `db:"can_use_promocode" json:"can_use_promocode"`
 	IsDonate        bool             `db:"is_donate" json:"is_donate"`
 	MinDonatePrice  int              `db:"min_donate_price" json:"min_donate_price"`
+	PayMethods      json.RawMessage  `db:"pay_methods" json:"pay_methods"`
+	CanProcess      bool             `db:"can_process" json:"can_process"`
 }
 
 type PayIntegration struct {
-	ID              int             `db:"id"`
+	ID              int64           `db:"id"`
 	Name            string          `db:"name"`
 	Type            string          `db:"type"`
 	Login           string          `db:"login"`
@@ -341,7 +341,12 @@ type PayIntegration struct {
 	IsActive        bool            `db:"is_active"`
 	SendReceipt     bool            `db:"send_receipt"`
 	ReceiptSettings json.RawMessage `db:"receipt_settings"`
-	ProjectID       int             `db:"project_id"`
+	ProjectID       int64           `db:"project_id"`
 	CreatedAt       time.Time       `db:"created_at"`
 	UpdatedAt       time.Time       `db:"updated_at"`
+}
+
+type PayMethod struct {
+	Name string `json:"name" db:"name"`
+	Type string `json:"type" db:"type"`
 }

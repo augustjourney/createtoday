@@ -44,6 +44,8 @@ type IService interface {
 	SolveQuiz(ctx context.Context, dto SolveQuizDTO) error
 	GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
 	DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error
+
+	GetOffer(ctx context.Context, offerSlug string) (*OfferForProcessing, error)
 }
 
 type Claims struct {
@@ -52,10 +54,7 @@ type Claims struct {
 }
 
 const (
-	MediaStatusUploaded = "uploaded"
-)
-
-const (
+	MediaStatusUploaded        = "uploaded"
 	RelatedMediaTypeSolvedQuiz = "solved_quiz"
 )
 
@@ -63,6 +62,19 @@ type Service struct {
 	repo   Storage
 	config *config.Config
 	emails IEmailsService
+}
+
+func (s *Service) GetOffer(ctx context.Context, offerSlug string) (*OfferForProcessing, error) {
+	offer, err := s.repo.FindOfferBySlug(ctx, offerSlug)
+	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
+		return nil, err
+	}
+
+	if err != nil {
+		return nil, common.ErrInternalError
+	}
+
+	return offer, nil
 }
 
 func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) {

@@ -34,6 +34,9 @@ type IController interface {
 	// Quizzes
 	SolveQuiz(ctx *fiber.Ctx) error
 	DeleteSolvedQuiz(ctx *fiber.Ctx) error
+
+	// Offers
+	GetOffer(ctx *fiber.Ctx) error
 }
 
 type Controller struct {
@@ -494,6 +497,21 @@ func (c *Controller) DeleteSolvedQuiz(ctx *fiber.Ctx) error {
 	}
 
 	return common.DoApiResponse(ctx, http.StatusOK, "Выполненное задание удалено", nil)
+}
+
+func (c *Controller) GetOffer(ctx *fiber.Ctx) error {
+	offerSlug := ctx.Params("slug")
+
+	offer, err := c.service.GetOffer(context.Background(), offerSlug)
+	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
+		return common.DoApiResponse(ctx, http.StatusNotFound, nil, err)
+	}
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, offer, nil)
 }
 
 func NewController(service IService) *Controller {

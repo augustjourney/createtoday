@@ -43,4 +43,7 @@ type Storage interface {
 
 	// offers
 	FindOfferBySlug(ctx context.Context, slug string) (*OfferForProcessing, error)
+
+	// payments
+	GetPayMethods(ctx context.Context, projectId int64) ([]PayMethod, error)
 }

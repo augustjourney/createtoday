@@ -576,12 +576,24 @@ func (r *PostgresRepo) DeleteSolvedQuiz(ctx context.Context, solvedQuizId int64,
 
 func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*OfferForProcessing, error) {
 	q := fmt.Sprintf(`
-		SELECT id, name, slug, price, is_free, description, ask_for_phone, ask_for_comment, currency, settings, 
-		       oferta_url, agreement_url, privacy_url, project_id, can_use_promocode, 
-		       ask_for_telegram, ask_for_instagram, is_donate, min_donate_price
-		FROM %s
-		WHERE slug = $1; 
-	`, OffersTable)
+		select o.name, o.slug, o.price, o.is_free, o.description, o.ask_for_phone, o.ask_for_comment, o.currency, o.settings, 
+		       o.oferta_url, o.agreement_url, o.privacy_url, o.can_use_promocode, 
+		       o.ask_for_telegram, o.ask_for_instagram, o.is_donate, o.min_donate_price, o_pm.pay_methods, json_array_length(o_pm.pay_methods) > 0 as can_process
+		from %s as o
+		left join lateral (
+			select 
+				json_agg(
+					json_build_object(
+						'name', pm.name, 
+						'type', pm.type
+					)
+				) as pay_methods
+			from %s as pm
+			where pm.project_id = o.project_id 
+			and pm.is_active = true
+		) as o_pm on true
+		where o.slug = $1; 
+	`, OffersTable, PayIntegrationsTable)
 
 	var offer OfferForProcessing
 
@@ -596,6 +608,23 @@ func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*Offer
 	}
 
 	return &offer, nil
+}
+
+func (r *PostgresRepo) GetPayMethods(ctx context.Context, projectId int64) ([]PayMethod, error) {
+	q := fmt.Sprintf(`
+		select name, type FROM %s
+		where project_id = $1 abd is_active is true;
+	`, PayIntegrationsTable)
+
+	var payMethods []PayMethod
+
+	err := r.db.SelectContext(ctx, &payMethods, q, projectId)
+	if err != nil {
+		logger.Log.Error("could not get pay methods", "err", err, "where", "hero.postgres.GetPayMethods")
+		return make([]PayMethod, 0), err
+	}
+
+	return payMethods, nil
 }
 
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
