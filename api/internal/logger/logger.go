@@ -7,7 +7,10 @@ import (
 
 var Log *slog.Logger
 
-func New() *slog.Logger {
+func init() {
 	Log = slog.New(slog.NewTextHandler(os.Stdout, nil))
+}
+
+func New() *slog.Logger {
 	return Log
 }
