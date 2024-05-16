@@ -613,7 +613,7 @@ func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*Offer
 func (r *PostgresRepo) GetPayMethods(ctx context.Context, projectId int64) ([]PayMethod, error) {
 	q := fmt.Sprintf(`
 		select name, type FROM %s
-		where project_id = $1 abd is_active is true;
+		where project_id = $1 and is_active is true;
 	`, PayIntegrationsTable)
 
 	var payMethods []PayMethod
