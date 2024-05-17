@@ -699,7 +699,7 @@ func (s *Service) ValidateJWTToken(ctx context.Context, token string) (*User, er
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return nil, common.ErrTokenExpired
 		}
-		if errors.As(err, &jwt.ErrTokenMalformed) {
+		if errors.Is(err, jwt.ErrTokenMalformed) {
 			return nil, common.ErrInvalidToken
 		}
 		return nil, err
