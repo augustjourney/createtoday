@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	conf := config.New()
+	conf := config.New("")
 	log := logger.New()
 
 	db, err := infra.InitPostgres(conf.DatabaseDSN)
