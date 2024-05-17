@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+func newTinkoffSystem() (*Tinkoff, *config.Config) {
+	tinkoff := Tinkoff{}
+	conf := config.New("../../.env")
+	return &tinkoff, conf
+}
+
 func TestGetValuesForToken(t *testing.T) {
 	t.Parallel()
 	t.Run("should not have data and receipt in values for token", func(t *testing.T) {
@@ -107,10 +113,9 @@ func TestAmountUpdating(t *testing.T) {
 }
 
 func TestGetPaymentLink(t *testing.T) {
-	conf := config.New()
 	t.Parallel()
+	tinkoff, conf := newTinkoffSystem()
 	t.Run("should not get payment link", func(t *testing.T) {
-		tinkoff := Tinkoff{}
 		result, err := tinkoff.GetPaymentLink(context.Background(), GetPaymentLinkPayload{
 			Email:       "test@example.com",
 			Description: "Test Product",
@@ -126,8 +131,6 @@ func TestGetPaymentLink(t *testing.T) {
 	})
 
 	t.Run("should get payment link", func(t *testing.T) {
-		t.Log(conf.TinkoffTestLogin, conf.TinkoffTestPassword)
-		tinkoff := Tinkoff{}
 		result, err := tinkoff.GetPaymentLink(context.Background(), GetPaymentLinkPayload{
 			Email:       "test@example.com",
 			Description: "Test Product",
