@@ -6,10 +6,13 @@ import (
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/logger"
+	"createtodayapi/internal/payments"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image/jpeg"
+	"math/big"
 	"os"
 	"time"
 
@@ -45,7 +48,9 @@ type IService interface {
 	GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
 	DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error
 
-	GetOffer(ctx context.Context, offerSlug string) (*OfferForProcessing, error)
+	GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error)
+	GetOfferForProcessing(ctx context.Context, offerSlug string) (*OfferForProcessing, error)
+	ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*ProcessOfferResult, error)
 }
 
 type Claims struct {
@@ -64,8 +69,8 @@ type Service struct {
 	emails IEmailsService
 }
 
-func (s *Service) GetOffer(ctx context.Context, offerSlug string) (*OfferForProcessing, error) {
-	offer, err := s.repo.FindOfferBySlug(ctx, offerSlug)
+func (s *Service) GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error) {
+	offer, err := s.repo.GetOfferForRegistration(ctx, offerSlug)
 	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
 		return nil, err
 	}
@@ -75,6 +80,200 @@ func (s *Service) GetOffer(ctx context.Context, offerSlug string) (*OfferForProc
 	}
 
 	return offer, nil
+}
+
+func (s *Service) GetOfferForProcessing(ctx context.Context, offerSlug string) (*OfferForProcessing, error) {
+	offer, err := s.repo.GetOfferForProcessing(ctx, offerSlug)
+	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
+		return nil, err
+	}
+
+	if err != nil {
+		return nil, common.ErrInternalError
+	}
+
+	return offer, nil
+}
+
+func (s *Service) ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*ProcessOfferResult, error) {
+	// Шаг 1. Получить оффер со всеми полями
+	offer, err := s.repo.GetOfferForProcessing(ctx, dto.Slug)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "got offer", "offer_id", offer.ID)
+
+	payMethod, err := s.repo.GetPayMethod(ctx, dto.SelectedPayMethod, offer.ProjectID)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "found pay method", "pay_method_id", payMethod.ID)
+
+	offer.PayMethod = payMethod
+
+	// Шаг 2. Зарегистрировать пользователя
+	userId, _, err := s.createUser(ctx, CreateUserDTO{
+		FirstName: dto.FirstName,
+		Email:     dto.Email,
+	})
+
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "created user", "user_id", userId)
+
+	dto.UserID = userId
+
+	result := ProcessOfferResult{}
+
+	// Шаг 3. Обновить информацию о пользователе
+	err = s.repo.UpdateUserInfo(ctx, UpdateUserInfoDTO{
+		UserID:    userId,
+		Phone:     dto.Phone,
+		Telegram:  dto.Telegram,
+		Instagram: dto.Instagram,
+	})
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "updated user", "user_id", userId)
+
+	// Шаг 4. Если оффер бесплатный, сделать доставку того, что дает оффер
+	if offer.IsFree {
+		err = s.enrollUser(ctx, userId, offer.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if offer.SendRegistrationEmail {
+			err = s.sendEnrollmentEmail(ctx, dto.Email, *offer.RegistrationEmailTheme, *offer.RegistrationEmail)
+			if err != nil {
+				logger.Log.ErrorContext(ctx, err.Error())
+			}
+		}
+
+		result.Message = *offer.SuccessMessage
+		result.RedirectURL = *offer.RedirectURL
+
+		logger.Log.InfoContext(ctx, "enrolled user", "user_id", userId, "offer_id", offer.ID)
+
+		return &result, nil
+	}
+
+	// Шаг 4. Если оффер платный, создать заказ и вернуть ссылку на оплату
+	payment, err := s.createPayment(ctx, CreatePaymentDTO{
+		PayMethod:        offer.PayMethod,
+		UserID:           dto.UserID,
+		Email:            dto.Email,
+		Phone:            dto.Phone,
+		OrderDescription: offer.Name,
+		OfferID:          offer.ID,
+		Price:            offer.Price,
+		// TODO: отправка письма о создании заказа может быть отключена
+	})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "created payment", "payment_id", payment.PaymentID, "order_id", payment.OrderID, "payment_url", payment.PaymentURL)
+
+	result.RedirectURL = payment.PaymentURL
+
+	return &result, nil
+}
+
+func (s *Service) createPayment(ctx context.Context, dto CreatePaymentDTO) (*payments.GetPaymentLinkResult, error) {
+	if dto.PayMethod == nil {
+		return nil, common.ErrInternalError
+	}
+
+	// создать заказ
+	orderId, err := s.createOrder(ctx, dto.UserID, dto.PayMethod.ID, dto.OfferID)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	// создать ссылку на оплату
+	paymentSystem := payments.NewPaymentSystem(dto.PayMethod.Type)
+	if paymentSystem == nil {
+		return nil, common.ErrPaymentSystemNotFound
+	}
+
+	paymentResult, err := paymentSystem.GetPaymentLink(ctx, payments.GetPaymentLinkPayload{
+		Email:           dto.Email,
+		Description:     dto.OrderDescription,
+		Amount:          dto.Price,
+		Phone:           dto.Phone,
+		Login:           dto.PayMethod.Login,
+		Password:        dto.PayMethod.Password,
+		OrderId:         orderId,
+		SendReceipt:     dto.PayMethod.SendReceipt,
+		ReceiptSettings: dto.PayMethod.ReceiptSettings,
+	})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	// Обновить paymentId в созданного заказа
+	// paymentId у платежных систем генерируется со ссылкой для оплаты
+	err = s.repo.UpdateOrderPaymentId(ctx, paymentResult.OrderID, paymentResult.PaymentID)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	// отправить письмо, что заказ создан
+	err = s.sendOrderCreatedEmail(ctx, dto.Email, dto.OrderDescription, dto.Price, paymentResult.PaymentURL)
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+
+	return paymentResult, nil
+}
+
+func (s *Service) createOrder(ctx context.Context, userId int64, payMethodId int64, offerId int64) (int64, error) {
+	newOrder := NewOrder{
+		UserID:        userId,
+		OfferID:       offerId,
+		IntegrationID: payMethodId,
+	}
+
+	orderId, err := s.repo.CreateOrder(ctx, newOrder)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return 0, common.ErrInternalError
+	}
+
+	return orderId, nil
+}
+
+func (s *Service) enrollUser(ctx context.Context, userId int64, offerId int64) error {
+	groups, err := s.repo.GetOfferGroups(ctx, offerId)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return common.ErrInternalError
+	}
+
+	err = s.repo.AddUserToGroups(ctx, userId, groups)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
 }
 
 func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) {
@@ -467,34 +666,166 @@ func (s *Service) GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
 	return quiz, nil
 }
 
-func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {
+func (s *Service) generatePassword() (string, error) {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,."
+	const passwordLength = 8
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+	charsetLength := big.NewInt(int64(len(chars)))
+	password := make([]byte, passwordLength)
 
-	if err != nil {
-		return nil, common.ErrInternalError
+	for i := range password {
+		num, err := rand.Int(rand.Reader, charsetLength)
+		if err != nil {
+			return "", err
+		}
+		password[i] = chars[num.Int64()]
 	}
 
+	return string(password), nil
+}
+
+func (s *Service) createUserPassword(ctx context.Context, userPassword string) (string, string, error) {
+	// сгенерировать пароль — если отсутствует
+	if userPassword == "" {
+		password, err := s.generatePassword()
+		if err != nil {
+			logger.Log.Error(err.Error())
+			return "", "", nil
+		}
+		userPassword = password
+	}
+
+	// заэшировать пароль
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(userPassword), 10)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return "", "", nil
+	}
+
+	return string(hashedPassword), userPassword, nil
+}
+
+func (s *Service) createUser(ctx context.Context, dto CreateUserDTO) (int64, bool, error) {
+
+	// создать пароль для пользователя
+	hashedPassword, rawPassword, err := s.createUserPassword(ctx, dto.Password)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return 0, false, common.ErrInternalError
+	}
+
+	// создать пользователя в базе
 	user := User{
-		Email:     body.Email,
-		Password:  string(hashedPassword),
-		FirstName: body.FirstName,
+		Email:     dto.Email,
+		Password:  hashedPassword,
+		FirstName: dto.FirstName,
 	}
 
-	result := SignUpResult{}
+	userId, err := s.repo.CreateUser(ctx, user)
 
-	err = s.repo.CreateUser(ctx, user)
+	var alreadyExists bool
 
 	if err != nil {
-
-		// Если ошибка — не является `пользователь уже существует`
-		// То выходим
 		if !errors.Is(err, common.ErrUserAlreadyExists) {
 			logger.Log.Error(err.Error(), "error", err)
-			return nil, common.ErrInternalError
+			return userId, alreadyExists, err
 		}
 
-		result.AlreadyExists = true
+		alreadyExists = true
+	}
+
+	if alreadyExists {
+		return userId, alreadyExists, nil
+	}
+
+	// отправить welcome-письмо
+	err = s.sendWelcomeEmail(ctx, user.Email, rawPassword)
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+
+	return userId, alreadyExists, err
+}
+
+func (s *Service) sendWelcomeEmail(ctx context.Context, userEmail string, userPassword string) error {
+	email, err := s.emails.GetEmailByType(ctx, "welcome")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+	}
+
+	email.Context["Email"] = userEmail
+	email.Context["Password"] = userPassword
+	email.Context["LoginURL"] = s.config.HeroAppBaseURL + "/login"
+	email.Context["LoginFullURL"] = s.config.HeroAppBaseURL + "/login?way=password&email=" + userEmail
+	email.Context["MailFrom"] = email.From.Email
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) sendOrderCreatedEmail(ctx context.Context, userEmail string, ordered string, amount uint64, paymentUrl string) error {
+	email, err := s.emails.GetEmailByType(ctx, "order-created")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+	}
+
+	email.Context["PaymentURL"] = paymentUrl
+	email.Context["Ordered"] = ordered
+	email.Context["Amount"] = amount
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) sendEnrollmentEmail(ctx context.Context, userEmail string, emailSubject string, emailBody string) error {
+	email, err := s.emails.GetEmailByType(ctx, "general")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	email.Subject = emailSubject
+	email.Body = emailBody
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "send enrollment email", "user_email", userEmail, "email_subject", emailSubject)
+
+	return nil
+}
+
+func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {
+
+	_, alreadyExists, err := s.createUser(ctx, CreateUserDTO{
+		FirstName: body.FirstName,
+		Email:     body.Email,
+		Password:  body.Password,
+	})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
 	}
 
 	// Находим только что созданного пользователя или уже существующего
@@ -505,28 +836,10 @@ func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, 
 		return nil, common.ErrInternalError
 	}
 
-	if !result.AlreadyExists {
-		email, err := s.emails.GetEmailByType(ctx, "welcome")
+	var result SignUpResult
 
-		if err != nil {
-			logger.Log.Error(err.Error(), "error", err)
-		}
-
-		email.Context["Email"] = body.Email
-		email.Context["Password"] = body.Password
-		email.Context["LoginURL"] = s.config.HeroAppBaseURL + "/login"
-		email.Context["LoginFullURL"] = s.config.HeroAppBaseURL + "/login?way=password&email=" + body.Email
-		email.Context["MailFrom"] = email.From.Email
-
-		err = s.emails.SendEmail(email, []string{body.Email})
-
-		if err != nil {
-			logger.Log.Error(err.Error())
-			return nil, common.ErrInternalError
-		}
-
+	if !alreadyExists {
 		result.Message = "Регистрация прошла успешно! На твою почту было отправлено письмо с данными для входа"
-
 		return &result, nil
 	}
 

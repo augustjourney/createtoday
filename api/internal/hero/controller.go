@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 type IController interface {
@@ -502,7 +503,7 @@ func (c *Controller) DeleteSolvedQuiz(ctx *fiber.Ctx) error {
 func (c *Controller) GetOffer(ctx *fiber.Ctx) error {
 	offerSlug := ctx.Params("slug")
 
-	offer, err := c.service.GetOffer(context.Background(), offerSlug)
+	offer, err := c.service.GetOfferForRegistration(context.Background(), offerSlug)
 	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
 		return common.DoApiResponse(ctx, http.StatusNotFound, nil, err)
 	}
@@ -512,6 +513,28 @@ func (c *Controller) GetOffer(ctx *fiber.Ctx) error {
 	}
 
 	return common.DoApiResponse(ctx, http.StatusOK, offer, nil)
+}
+
+func (c *Controller) ProcessOffer(ctx *fiber.Ctx) error {
+	var body ProcessOfferDTO
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	body.Slug = ctx.Params("slug")
+
+	requestId, _ := uuid.NewRandom()
+	rCtx := context.WithValue(context.Background(), "request-id", requestId)
+
+	result, err := c.service.ProcessOffer(rCtx, body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, result, nil)
 }
 
 func NewController(service IService) *Controller {

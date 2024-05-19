@@ -151,3 +151,48 @@ type SolveQuizDTO struct {
 	QuizSlug string
 	Media    []FileUpload
 }
+
+type CreateUserDTO struct {
+	FirstName string `json:"first_name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+}
+
+// TODO: сделать валидацию
+// Получить оффер из бд
+// Проверить обязательные поля — ask_for_telegram, ask_for_instagram, ask_for_phone
+// По умолчанию обязательные поля — email, first_name, selected_pay_method
+type ProcessOfferDTO struct {
+	Slug              string `json:"slug"`
+	UserID            int64  `json:"user_id"`
+	FirstName         string `json:"first_name"`
+	LastName          string `json:"last_name"`
+	Email             string `json:"email"`
+	Phone             string `json:"phone"`
+	Telegram          string `json:"telegram" db:"telegram"`
+	Instagram         string `json:"instagram" db:"instagram"`
+	Comment           string `json:"comment"`
+	SelectedPayMethod int64  `json:"selected_pay_method" db:"selected_pay_method"`
+}
+
+type ProcessOfferResult struct {
+	Message     string `json:"message"`
+	RedirectURL string `json:"redirect_url"`
+}
+
+type CreatePaymentDTO struct {
+	PayMethod        *PayIntegration
+	UserID           int64
+	Email            string
+	Phone            string
+	OrderDescription string
+	OfferID          int64
+	Price            uint64
+}
+
+type UpdateUserInfoDTO struct {
+	UserID    int64  `json:"user_id" db:"user_id"`
+	Phone     string `json:"phone" db:"phone"`
+	Telegram  string `json:"telegram" db:"telegram"`
+	Instagram string `json:"instagram" db:"instagram"`
+}
