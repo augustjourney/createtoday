@@ -76,6 +76,54 @@ var welcomeLetter = Email{
 	`,
 }
 
+var orderCreated = Email{
+	Subject:  "Заказ принят",
+	Template: "default",
+	From: EmailSender{
+		Email: "hello@createtoday.ru",
+		Name:  "CreateToday",
+	},
+	IsActive: true,
+	Type:     "order-created",
+	Context: map[string]interface{}{
+		"Domain":    "hero.createtoday.ru",
+		"RespondTo": "hello@createtoday.ru",
+	},
+	Body: `
+		<h3>Заказ принят! 🚀 </h3>
+
+		<p>Привет! Только что поступил твой заказ на <strong>{{ .Context.Ordered }}</strong> на сумму <strong>{{ .Context.Amount }}₽</strong>.</p>
+
+		<p>Скоро у тебя будет кое-что очень крутое 🤩. Для подтверждения заказа —
+			оплати его по ссылке:</p>
+
+		<a class='btn' target='_blank' rel='noreferrer noopener' href='{{ .Context.PaymentURL }}'>
+			Перейти к оплате
+		</a>
+
+		<p>
+			Если появятся вопросы, вот наша почта: {{ .Context.RespondTo }}.
+		</p>
+
+		<p>Успехов, <br />команда create.today</p>
+	`,
+}
+
+var general = Email{
+	Subject:  "",
+	Template: "default",
+	From: EmailSender{
+		Email: "hello@createtoday.ru",
+		Name:  "CreateToday",
+	},
+	IsActive: true,
+	Type:     "general",
+	Context: map[string]interface{}{
+		"Domain": "hero.createtoday.ru",
+	},
+	Body: "",
+}
+
 type MemoryRepo struct{}
 
 func (r *MemoryRepo) FindByType(ctx context.Context, emailType string) (*Email, error) {
@@ -89,6 +137,6 @@ func (r *MemoryRepo) FindByType(ctx context.Context, emailType string) (*Email, 
 }
 
 func NewMemoryRepo() *MemoryRepo {
-	emails = append(emails, magicLinkLetter, welcomeLetter)
+	emails = append(emails, magicLinkLetter, welcomeLetter, orderCreated, general)
 	return &MemoryRepo{}
 }
