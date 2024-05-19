@@ -48,3 +48,6 @@ var ErrQuizNotFound = errors.New("Квиз не найден")
 
 // offers
 var ErrOfferNotFound = errors.New("Такой оффер не найден")
+
+// payments
+var ErrPaymentSystemNotFound = errors.New("Такой платежный метод не найден")
