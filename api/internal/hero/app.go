@@ -41,6 +41,7 @@ func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
 	hero.Delete("/courses/:courseSlug/lessons/:lessonSlug/quizzes/:slug/solved", AuthMiddleware(service), controller.DeleteSolvedQuiz)
 
 	hero.Get("/offers/:slug", controller.GetOffer)
+	hero.Post("/offers/:slug", controller.ProcessOffer)
 
 	return app
 }

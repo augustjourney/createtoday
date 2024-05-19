@@ -123,3 +123,13 @@ Authorization: Bearer {{auth_token}}
 ### Offer
 GET {{serverAddress}}/hero/offers/{{offerSlug}}
 Accept: application/json
+
+### Process Offer
+POST {{serverAddress}}/hero/offers/{{offerSlug}}
+Accept: application/json
+
+{
+  "email":"{{email}}",
+  "phone":"123456789",
+  "selected_pay_method":6
+}
