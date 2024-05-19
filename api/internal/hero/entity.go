@@ -275,11 +275,11 @@ type QuizSolvedLesson struct {
 }
 
 type Offer struct {
-	ID                     int              `db:"id"`
+	ID                     int64            `db:"id"`
 	Name                   string           `db:"name"`
 	Description            *string          `db:"description"`
 	Slug                   string           `db:"slug"`
-	Price                  int              `db:"price"`
+	Price                  uint64           `db:"price"`
 	Currency               string           `db:"currency"`
 	IsFree                 bool             `db:"is_free"`
 	SendOrderCreated       bool             `db:"send_order_created"`
@@ -310,11 +310,11 @@ type Offer struct {
 	SalebotCallbackText    *string          `db:"salebot_callback_text"`
 }
 
-type OfferForProcessing struct {
+type OfferForRegistration struct {
 	Name            string           `db:"name" json:"name"`
 	Description     *string          `db:"description" json:"description"`
 	Slug            string           `db:"slug" json:"slug"`
-	Price           int              `db:"price" json:"price"`
+	Price           uint64           `db:"price" json:"price"`
 	Currency        string           `db:"currency" json:"currency"`
 	IsFree          bool             `db:"is_free" json:"is_free"`
 	Settings        *json.RawMessage `db:"settings" json:"settings"`
@@ -332,21 +332,78 @@ type OfferForProcessing struct {
 	CanProcess      bool             `db:"can_process" json:"can_process"`
 }
 
+type OfferForProcessing struct {
+	ID                     int64            `db:"id"`
+	Name                   string           `db:"name"`
+	Slug                   string           `db:"slug"`
+	Price                  uint64           `db:"price"`
+	Currency               string           `db:"currency"`
+	IsFree                 bool             `db:"is_free"`
+	SendOrderCreated       bool             `db:"send_order_created"`
+	SendOrderCompleted     bool             `db:"send_order_completed"`
+	SendRegistrationEmail  bool             `db:"send_registration_email"`
+	RegistrationEmail      *string          `db:"registration_email"`
+	Settings               *json.RawMessage `db:"settings"`
+	ProjectID              int64            `db:"project_id"`
+	RegistrationEmailTheme *string          `db:"registration_email_theme"`
+	SuccessMessage         *string          `db:"success_message"`
+	RedirectURL            *string          `db:"redirect_url"`
+	SendWelcomeEmail       bool             `db:"send_welcome_email"`
+	CanUsePromocode        bool             `db:"can_use_promocode"`
+	IsDonate               bool             `db:"is_donate"`
+	MinDonatePrice         int              `db:"min_donate_price"`
+	SendToSalebot          bool             `db:"send_to_salebot"`
+	SalebotCallbackText    *string          `db:"salebot_callback_text"`
+	PayMethod              *PayIntegration  `db:"pay_method"`
+}
+
+type ReceiptSettings struct {
+	Taxation string `json:"taxation"`
+}
+
 type PayIntegration struct {
-	ID              int64           `db:"id"`
-	Name            string          `db:"name"`
-	Type            string          `db:"type"`
-	Login           string          `db:"login"`
-	Password        string          `db:"password"`
-	IsActive        bool            `db:"is_active"`
-	SendReceipt     bool            `db:"send_receipt"`
-	ReceiptSettings json.RawMessage `db:"receipt_settings"`
-	ProjectID       int64           `db:"project_id"`
-	CreatedAt       time.Time       `db:"created_at"`
-	UpdatedAt       time.Time       `db:"updated_at"`
+	ID              int64            `json:"id" db:"id"`
+	Name            string           `json:"name" db:"name"`
+	Type            string           `json:"type" db:"type"`
+	Login           string           `json:"login" db:"login"`
+	Password        string           `json:"password" db:"password"`
+	IsActive        bool             `json:"is_active" db:"is_active"`
+	SendReceipt     bool             `json:"send_receipt" db:"send_receipt"`
+	ReceiptSettings *ReceiptSettings `json:"receipt_settings" db:"receipt_settings"`
+	ProjectID       int64            `json:"project_id" db:"project_id"`
+	CreatedAt       time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at" db:"updated_at"`
 }
 
 type PayMethod struct {
 	Name string `json:"name" db:"name"`
 	Type string `json:"type" db:"type"`
+}
+
+type Order struct {
+	ID              int64            `db:"id"`
+	Description     *string          `db:"description"`
+	Comment         *string          `db:"comment"`
+	Price           uint64           `db:"price"`
+	Currency        string           `db:"currency"`
+	Status          string           `db:"status"`
+	Error           *json.RawMessage `db:"error"`
+	CardInfo        *json.RawMessage `db:"card_info"`
+	PaymentID       *string          `db:"payment_id"`
+	IntegrationID   int64            `db:"integration_id"`
+	OfferID         int64            `db:"offer_id"`
+	ProjectID       int64            `db:"project_id"`
+	UserID          int64            `db:"user_id"`
+	Note            *string          `db:"note"`
+	IsGift          bool             `db:"is_gift"`
+	GiftedTo        *json.RawMessage `db:"gifted_to"`
+	SalebotClientID *string          `db:"salebot_client_id"`
+	CreatedAt       time.Time        `db:"created_at"`
+	UpdatedAt       time.Time        `db:"updated_at"`
+}
+
+type NewOrder struct {
+	IntegrationID int64 `db:"integration_id"`
+	OfferID       int64 `db:"offer_id"`
+	UserID        int64 `db:"user_id"`
 }
