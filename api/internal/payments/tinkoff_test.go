@@ -3,9 +3,10 @@ package payments
 import (
 	"context"
 	"createtodayapi/internal/config"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func newTinkoffSystem() (*Tinkoff, *config.Config) {
@@ -29,7 +30,7 @@ func TestGetValuesForToken(t *testing.T) {
 				Email:    "test@example.com",
 				Taxation: "usn",
 				Items: []ReceiptItem{
-					ReceiptItem{
+					{
 						Name:   "Test Product",
 						Price:  100,
 						Amount: 100,
@@ -63,7 +64,7 @@ func TestGenerateToken(t *testing.T) {
 				Email:    "test@example.com",
 				Taxation: "usn",
 				Items: []ReceiptItem{
-					ReceiptItem{
+					{
 						Name:   "Test Product",
 						Price:  2500,
 						Amount: 2500,
@@ -96,7 +97,7 @@ func TestAmountUpdating(t *testing.T) {
 				Email:    "test@example.com",
 				Taxation: "usn",
 				Items: []ReceiptItem{
-					ReceiptItem{
+					{
 						Name:   "Test Product",
 						Price:  amount,
 						Amount: amount,
@@ -120,7 +121,7 @@ func TestGetPaymentLink(t *testing.T) {
 			Email:       "test@example.com",
 			Description: "Test Product",
 			Amount:      2500,
-			OrderId:     "101231",
+			OrderId:     101231,
 			Phone:       "13812345678",
 			SendReceipt: false,
 			Login:       "123123123DEMO",
@@ -135,15 +136,14 @@ func TestGetPaymentLink(t *testing.T) {
 			Email:       "test@example.com",
 			Description: "Test Product",
 			Amount:      2500,
-			OrderId:     "101231",
+			OrderId:     101231,
 			Phone:       "13812345678",
 			SendReceipt: false,
 			Login:       conf.TinkoffTestLogin,
 			Password:    conf.TinkoffTestPassword,
 		})
 		require.NoError(t, err)
-		assert.NotNil(t, result, "should get link")
-		t.Log(result.PaymentID, result.PaymentURL)
+		require.NotNil(t, result, "should get link")
 		if result != nil {
 			assert.NotEqual(t, result.PaymentURL, "", "payment url should not be empty")
 			assert.NotEqual(t, result.PaymentID, "", "payment id should not be empty")

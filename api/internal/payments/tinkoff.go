@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -27,9 +28,9 @@ type ReceiptItem struct {
 }
 
 type Receipt struct {
-	Email    string `json:"Email"`
-	Taxation string `json:"Taxation"`
-	Items    []ReceiptItem
+	Email    string        `json:"Email"`
+	Taxation string        `json:"Taxation"`
+	Items    []ReceiptItem `json:"Items"`
 }
 
 type TinkoffInitPayload struct {
@@ -38,8 +39,8 @@ type TinkoffInitPayload struct {
 	OrderId     string            `json:"OrderId"`
 	Description string            `json:"Description"`
 	DATA        map[string]string `json:"DATA"`
-	Receipt     *Receipt
-	Token       string `json:"Token"`
+	Receipt     *Receipt          `json:"Receipt"`
+	Token       string            `json:"Token"`
 }
 
 type TinkoffInitResponse struct {
@@ -112,11 +113,10 @@ func (p *TinkoffInitPayload) updateAmount() {
 type Tinkoff struct{}
 
 func (t *Tinkoff) GetPaymentLink(ctx context.Context, payload GetPaymentLinkPayload) (*GetPaymentLinkResult, error) {
-
 	initPayload := TinkoffInitPayload{
 		TerminalKey: payload.Login,
 		Amount:      payload.Amount,
-		OrderId:     payload.OrderId,
+		OrderId:     strconv.Itoa(int(payload.OrderId)),
 		Description: payload.Description,
 		DATA: map[string]string{
 			"email": payload.Email,
@@ -127,15 +127,16 @@ func (t *Tinkoff) GetPaymentLink(ctx context.Context, payload GetPaymentLinkPayl
 
 	initPayload.GenerateToken(payload.Password)
 
-	if payload.SendReceipt && payload.ReceiptSettings != nil {
+	if payload.SendReceipt {
 		initPayload.Receipt = &Receipt{
-			Email:    payload.Email,
-			Taxation: payload.ReceiptSettings.Taxation,
+			Email: payload.Email,
+			// TODO: fix taxation
+			Taxation: "osn",
 			Items: []ReceiptItem{
-				ReceiptItem{
-					Name:     payload.Description,
-					Price:    payload.Amount,
-					Amount:   payload.Amount,
+				{
+					Name:     initPayload.Description,
+					Price:    initPayload.Amount,
+					Amount:   initPayload.Amount,
 					Quantity: 1,
 					Tax:      "none",
 				},
@@ -171,11 +172,17 @@ func (t *Tinkoff) GetPaymentLink(ctx context.Context, payload GetPaymentLinkPayl
 	}
 
 	if !result.Success {
+		fmt.Println(result)
 		return nil, errors.New(result.Details)
 	}
 
 	return &GetPaymentLinkResult{
 		PaymentID:  result.PaymentId,
 		PaymentURL: result.PaymentURL,
+		OrderID:    payload.OrderId,
 	}, nil
+}
+
+func NewTinkoff() *Tinkoff {
+	return &Tinkoff{}
 }
