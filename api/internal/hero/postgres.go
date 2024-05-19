@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 const UsersTable = "public.user"
@@ -29,6 +30,8 @@ const SolvedQuizzesView = "public._solvedquizzes"
 const CompletedLessonsTable = "public.completed_lessons"
 const OffersTable = "public.offer"
 const PayIntegrationsTable = "public.pay_integration"
+const OrdersTable = "public.order"
+const OffersGroupsTable = "public.offer_group"
 
 type PostgresRepo struct {
 	db *sqlx.DB
@@ -117,24 +120,41 @@ func (r *PostgresRepo) UpdatePassword(ctx context.Context, userId int, password 
 	return nil
 }
 
-func (r *PostgresRepo) CreateUser(ctx context.Context, user User) error {
+func (r *PostgresRepo) CreateUser(ctx context.Context, user User) (int64, error) {
 	q := fmt.Sprintf(`
 		insert into %s (email, password, first_name)
-		values ($1, $2, $3)
+		values (:email, :password, :first_name);
 	`, UsersTable)
-	_, err := r.db.ExecContext(ctx, q, user.Email, user.Password, user.FirstName)
+
+	query, args, err := r.db.BindNamed(q, user)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateUser.bindNamed()")
+		return 0, err
+	}
+
+	var userId int64
+
+	err = r.db.GetContext(ctx, &userId, query, args...)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == pgerrcode.UniqueViolation {
-				return common.ErrUserAlreadyExists
-			}
+		if !errors.As(err, &pgErr) {
+			logger.Log.Error(err.Error(), "where", "CreateUser.GetContext()")
+			return 0, err
 		}
-		return err
+
+		if pgErr.Code == pgerrcode.UniqueViolation {
+			q2 := fmt.Sprintf(`select id from %s where email = $1`, UsersTable)
+			err = r.db.GetContext(ctx, &userId, q2, user.Email)
+			if err != nil {
+				return 0, err
+			}
+			return userId, common.ErrUserAlreadyExists
+		}
 	}
 
-	return err
+	return userId, nil
 }
 
 func (r *PostgresRepo) GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error) {
@@ -574,7 +594,7 @@ func (r *PostgresRepo) DeleteSolvedQuiz(ctx context.Context, solvedQuizId int64,
 	return nil
 }
 
-func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*OfferForProcessing, error) {
+func (r *PostgresRepo) GetOfferForRegistration(ctx context.Context, slug string) (*OfferForRegistration, error) {
 	q := fmt.Sprintf(`
 		select o.name, o.slug, o.price, o.is_free, o.description, o.ask_for_phone, o.ask_for_comment, o.currency, o.settings, 
 		       o.oferta_url, o.agreement_url, o.privacy_url, o.can_use_promocode, 
@@ -584,6 +604,7 @@ func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*Offer
 			select 
 				json_agg(
 					json_build_object(
+		    			'id', pm.id,
 						'name', pm.name, 
 						'type', pm.type
 					)
@@ -595,7 +616,7 @@ func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*Offer
 		where o.slug = $1; 
 	`, OffersTable, PayIntegrationsTable)
 
-	var offer OfferForProcessing
+	var offer OfferForRegistration
 
 	err := r.db.GetContext(ctx, &offer, q, slug)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -604,6 +625,34 @@ func (r *PostgresRepo) FindOfferBySlug(ctx context.Context, slug string) (*Offer
 
 	if err != nil {
 		logger.Log.Error(err.Error(), "where", "hero.postgres.FindOfferBySlug")
+		return nil, err
+	}
+
+	return &offer, nil
+}
+
+func (r *PostgresRepo) GetOfferForProcessing(ctx context.Context, slug string) (*OfferForProcessing, error) {
+	q := fmt.Sprintf(`
+		select o.id, o.name, o.slug, o.price, o.is_free, o.currency, o.settings, 
+		       o.can_use_promocode, o.is_donate, o.min_donate_price,
+		       o.success_message, o.redirect_url, o.registration_email_theme,
+		       o.send_order_created, o.send_order_completed, o.send_registration_email, o.registration_email,
+		       o.project_id, o.send_welcome_email, o.send_to_salebot, o.salebot_callback_text
+		from %s as o
+		where o.slug = $1
+		group by o.id; 
+	`, OffersTable)
+
+	var offer OfferForProcessing
+
+	err := r.db.GetContext(ctx, &offer, q, slug)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, common.ErrOfferNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.GetOfferForProcessing")
 		return nil, err
 	}
 
@@ -625,6 +674,145 @@ func (r *PostgresRepo) GetPayMethods(ctx context.Context, projectId int64) ([]Pa
 	}
 
 	return payMethods, nil
+}
+
+func (r *PostgresRepo) GetPayMethod(ctx context.Context, payMethodId int64, projectId int64) (*PayIntegration, error) {
+	q := fmt.Sprintf(`
+		select id, name, type, login, password, send_receipt, receipt_settings
+		from %s as pm
+		where is_active = true and id = $1 and project_id = $2;
+	`, PayIntegrationsTable)
+
+	var payMethod PayIntegration
+
+	err := r.db.GetContext(ctx, &payMethod, q, payMethodId, projectId)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.GetPayMethod")
+		return nil, common.ErrPaymentSystemNotFound
+	}
+
+	return &payMethod, err
+}
+
+func (r *PostgresRepo) CreateOrder(ctx context.Context, order NewOrder) (int64, error) {
+	q := fmt.Sprintf(`
+		insert into %s (integration_id, offer_id, user_id, description, project_id, price, currency)
+		select :integration_id, :offer_id, :user_id, name, project_id, price, currency
+		from %s where id = :offer_id
+		returning id;
+	`, OrdersTable, OffersTable)
+
+	query, args, err := r.db.BindNamed(q, order)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateOrder.bindNamed()")
+		return 0, err
+	}
+
+	var orderId int64
+
+	err = r.db.GetContext(ctx, &orderId, query, args...)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateOrder.GetContext()")
+		return 0, err
+	}
+
+	return orderId, nil
+}
+
+func (r *PostgresRepo) UpdateOrderPaymentId(ctx context.Context, orderId int64, paymentId string) error {
+	q := fmt.Sprintf(`update %s set payment_id = $2 where id = $1`, OrdersTable)
+
+	_, err := r.db.ExecContext(ctx, q, orderId, paymentId)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "UpdateOrderPaymentId.Exec()")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) UpdateUserInfo(ctx context.Context, dto UpdateUserInfoDTO) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "UpdateUserInfo.BeginTx()")
+		return err
+	}
+
+	if dto.Phone != "" {
+		q1 := fmt.Sprintf(`update %s set phone = $2 where id = $1`, UsersTable)
+		_, err = tx.ExecContext(ctx, q1, dto.UserID, dto.Phone)
+		if err != nil {
+			logger.Log.Error(err.Error(), "where", "UpdateUserInfo.q1()")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	if dto.Telegram != "" {
+		q2 := fmt.Sprintf(`update %s set telegram = $2 where id = $1`, UsersTable)
+		_, err = tx.ExecContext(ctx, q2, dto.UserID, dto.Telegram)
+		if err != nil {
+			logger.Log.Error(err.Error(), "where", "UpdateUserInfo.q2()")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	if dto.Instagram != "" {
+		q3 := fmt.Sprintf(`update %s set instagram = $2 where id = $1`, UsersTable)
+		_, err = tx.ExecContext(ctx, q3, dto.UserID, dto.Instagram)
+		if err != nil {
+			logger.Log.Error(err.Error(), "where", "UpdateUserInfo.q3()")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *PostgresRepo) GetOfferGroups(ctx context.Context, offerId int64) ([]int64, error) {
+	var groups []int64
+
+	q := fmt.Sprintf(`select array_agg(group_id) as groups from %s where offer_id = $1 group by offer_id`, OffersGroupsTable)
+
+	err := r.db.GetContext(ctx, pq.Array(&groups), q, offerId)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.GetOfferGroups")
+		return make([]int64, 0), err
+	}
+
+	return groups, nil
+}
+
+func (r *PostgresRepo) AddUserToGroups(ctx context.Context, userId int64, groupIds []int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error(), "where", "AddUserToGroups.BeginTx")
+		return err
+	}
+
+	for _, groupId := range groupIds {
+		q := fmt.Sprintf(`
+			insert into %s
+			(user_id, group_id, status)
+			values ($1, $2, 'active')
+			on conflict (user_id, group_id, status) do nothing;
+		`, UserGroupsTable)
+
+		_, err = tx.ExecContext(ctx, q, userId, groupId)
+		if err != nil {
+			logger.Log.ErrorContext(ctx, err.Error(), "where", "AddUserToGroups.ExecContext")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {

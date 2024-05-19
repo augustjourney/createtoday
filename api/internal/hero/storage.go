@@ -7,8 +7,9 @@ import (
 type Storage interface {
 	// users
 	FindUserByEmail(ctx context.Context, email string) (*User, error)
-	CreateUser(ctx context.Context, user User) error
+	CreateUser(ctx context.Context, user User) (int64, error)
 	FindUserById(ctx context.Context, id int) (*User, error)
+	UpdateUserInfo(ctx context.Context, dto UpdateUserInfoDTO) error
 
 	// profile
 	GetProfileByUserId(ctx context.Context, userId int) (*Profile, error)
@@ -42,8 +43,18 @@ type Storage interface {
 	UpdateMediaStatus(ctx context.Context, mediaId int64, status string) error
 
 	// offers
-	FindOfferBySlug(ctx context.Context, slug string) (*OfferForProcessing, error)
+	GetOfferForRegistration(ctx context.Context, slug string) (*OfferForRegistration, error)
+	GetOfferForProcessing(ctx context.Context, slug string) (*OfferForProcessing, error)
+	GetOfferGroups(ctx context.Context, offerId int64) ([]int64, error)
 
 	// payments
 	GetPayMethods(ctx context.Context, projectId int64) ([]PayMethod, error)
+	GetPayMethod(ctx context.Context, payMethodId int64, projectId int64) (*PayIntegration, error)
+
+	// orders
+	CreateOrder(ctx context.Context, order NewOrder) (int64, error)
+	UpdateOrderPaymentId(ctx context.Context, orderId int64, paymentId string) error
+
+	// enrollments
+	AddUserToGroups(ctx context.Context, userId int64, groupIds []int64) error
 }
