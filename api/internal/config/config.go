@@ -33,6 +33,7 @@ type Config struct {
 	S3Provider          string
 	TinkoffTestLogin    string `env:"TINKOFF_TEST_LOGIN"`
 	TinkoffTestPassword string `env:"TINKOFF_TEST_PASSWORD"`
+	ProdamusTestLogin   string `env:"PRODAMUS_TEST_LOGIN"`
 }
 
 var config *Config
