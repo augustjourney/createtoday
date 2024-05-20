@@ -7,7 +7,8 @@ import (
 )
 
 type ContextValues struct {
-	RequestID string
+	RequestID  string
+	RequestKey string
 }
 
 var Log *slog.Logger
@@ -16,7 +17,8 @@ var contextValues ContextValues
 func init() {
 	Log = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	contextValues = ContextValues{
-		RequestID: "request-id",
+		RequestID:  "request-id",
+		RequestKey: "request-key",
 	}
 }
 
@@ -26,7 +28,8 @@ func New() *slog.Logger {
 
 func putContextValuesToArgs(args []interface{}, ctx context.Context) []interface{} {
 	requestId := ctx.Value(contextValues.RequestID)
-	args = append(args, contextValues.RequestID, requestId)
+	requestKey := ctx.Value(contextValues.RequestKey)
+	args = append(args, contextValues.RequestID, requestId, contextValues.RequestKey, requestKey)
 	return args
 }
 
