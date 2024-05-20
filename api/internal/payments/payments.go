@@ -30,6 +30,8 @@ func NewPaymentSystem(paymentSystemType string) PaymentSystem {
 	switch paymentSystemType {
 	case "tinkoff":
 		return NewTinkoff()
+	case "prodamus":
+		return NewProdamus()
 	}
 	return nil
 }
