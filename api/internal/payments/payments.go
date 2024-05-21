@@ -2,6 +2,7 @@ package payments
 
 import (
 	"context"
+	"strings"
 )
 
 type GetPaymentLinkPayload struct {
@@ -26,6 +27,19 @@ type PaymentSystem interface {
 	GetPaymentLink(ctx context.Context, payload GetPaymentLinkPayload) (*GetPaymentLinkResult, error)
 }
 
+const StatusSucceeded = "succeeded"
+const StatusCanceled = "canceled"
+const StatusRejected = "rejected"
+const StatusPending = "pending"
+const StatusExpired = "expired"
+
+var statuses map[string]string = map[string]string{
+	StatusSucceeded: "CONFIRMED,Completed,succeeded,success",
+	StatusCanceled:  "canceled,order_canceled",
+	StatusRejected:  "REJECTED,Declined,order_denied",
+	StatusExpired:   "DEADLINE_EXPIRED",
+}
+
 func NewPaymentSystem(paymentSystemType string) PaymentSystem {
 	switch paymentSystemType {
 	case "tinkoff":
@@ -34,4 +48,21 @@ func NewPaymentSystem(paymentSystemType string) PaymentSystem {
 		return NewProdamus()
 	}
 	return nil
+}
+
+func FormatStatus(status string) string {
+	// У всех платежных систем свои статусы
+	// Здесь приводим их в одну единую систему
+
+	if status == "" {
+		return StatusPending
+	}
+
+	for needStatus, possibleStatus := range statuses {
+		if strings.Contains(strings.ToLower(possibleStatus), strings.ToLower(status)) {
+			return needStatus
+		}
+	}
+
+	return StatusPending
 }
