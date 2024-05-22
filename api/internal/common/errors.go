@@ -51,3 +51,6 @@ var ErrOfferNotFound = errors.New("Такой оффер не найден")
 
 // payments
 var ErrPaymentSystemNotFound = errors.New("Такой платежный метод не найден")
+
+// orders
+var ErrOrderNotFound = errors.New("Такой заказ не найден")

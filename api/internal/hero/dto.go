@@ -196,3 +196,20 @@ type UpdateUserInfoDTO struct {
 	Telegram  string `json:"telegram" db:"telegram"`
 	Instagram string `json:"instagram" db:"instagram"`
 }
+
+type TinkoffWebhookBody struct {
+	TerminalKey string `json:"TerminalKey"`
+	Amount      uint64 `json:"Amount"`
+	OrderId     string `json:"OrderId"`
+	Success     bool   `json:"Success"`
+	Status      string `json:"Status"`
+	PaymentId   int64  `json:"PaymentId"`
+	ErrorCode   string `json:"ErrorCode"`
+	Message     string `json:"Message"`
+	Details     string `json:"Details"`
+	RebillId    int64  `json:"RebillId"`
+	CardId      int    `json:"CardId"`
+	Pan         string `json:"Pan"`
+	ExpDate     string `json:"ExpDate"`
+	Token       string `json:"Token"`
+}

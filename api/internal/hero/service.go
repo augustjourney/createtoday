@@ -14,6 +14,7 @@ import (
 	"image/jpeg"
 	"math/big"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -51,6 +52,8 @@ type IService interface {
 	GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error)
 	GetOfferForProcessing(ctx context.Context, offerSlug string) (*OfferForProcessing, error)
 	ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*ProcessOfferResult, error)
+
+	ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody) error
 }
 
 type Claims struct {
@@ -99,19 +102,19 @@ func (s *Service) ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*Proce
 	// Шаг 1. Получить оффер со всеми полями
 	offer, err := s.repo.GetOfferForProcessing(ctx, dto.Slug)
 	if err != nil {
-		logger.Log.ErrorContext(ctx, err.Error())
+		logger.Info(ctx, err.Error())
 		return nil, common.ErrInternalError
 	}
 
-	logger.Log.InfoContext(ctx, "got offer", "offer_id", offer.ID)
+	logger.Info(ctx, "got offer", "offer_id", offer.ID)
 
 	payMethod, err := s.repo.GetPayMethod(ctx, dto.SelectedPayMethod, offer.ProjectID)
 	if err != nil {
-		logger.Log.ErrorContext(ctx, err.Error())
+		logger.Error(ctx, err.Error())
 		return nil, common.ErrInternalError
 	}
 
-	logger.Log.InfoContext(ctx, "found pay method", "pay_method_id", payMethod.ID)
+	logger.Info(ctx, "found pay method", "pay_method_id", payMethod.ID)
 
 	offer.PayMethod = payMethod
 
@@ -126,7 +129,7 @@ func (s *Service) ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*Proce
 		return nil, common.ErrInternalError
 	}
 
-	logger.Log.InfoContext(ctx, "created user", "user_id", userId)
+	logger.Info(ctx, "created user", "user_id", userId)
 
 	dto.UserID = userId
 
@@ -140,30 +143,23 @@ func (s *Service) ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*Proce
 		Instagram: dto.Instagram,
 	})
 	if err != nil {
-		logger.Log.ErrorContext(ctx, err.Error())
+		logger.Error(ctx, err.Error())
 		return nil, common.ErrInternalError
 	}
 
-	logger.Log.InfoContext(ctx, "updated user", "user_id", userId)
+	logger.Info(ctx, "updated user", "user_id", userId)
 
 	// Шаг 4. Если оффер бесплатный, сделать доставку того, что дает оффер
 	if offer.IsFree {
-		err = s.enrollUser(ctx, userId, offer.ID)
+		err = s.enrollUser(ctx, userId, dto.Email, offer)
 		if err != nil {
 			return nil, err
-		}
-
-		if offer.SendRegistrationEmail {
-			err = s.sendEnrollmentEmail(ctx, dto.Email, *offer.RegistrationEmailTheme, *offer.RegistrationEmail)
-			if err != nil {
-				logger.Log.ErrorContext(ctx, err.Error())
-			}
 		}
 
 		result.Message = *offer.SuccessMessage
 		result.RedirectURL = *offer.RedirectURL
 
-		logger.Log.InfoContext(ctx, "enrolled user", "user_id", userId, "offer_id", offer.ID)
+		logger.Info(ctx, "enrolled user", "user_id", userId, "offer_id", offer.ID)
 
 		return &result, nil
 	}
@@ -260,8 +256,8 @@ func (s *Service) createOrder(ctx context.Context, userId int64, payMethodId int
 	return orderId, nil
 }
 
-func (s *Service) enrollUser(ctx context.Context, userId int64, offerId int64) error {
-	groups, err := s.repo.GetOfferGroups(ctx, offerId)
+func (s *Service) enrollUser(ctx context.Context, userId int64, userEmail string, offer *OfferForProcessing) error {
+	groups, err := s.repo.GetOfferGroups(ctx, offer.ID)
 	if err != nil {
 		logger.Log.ErrorContext(ctx, err.Error())
 		return common.ErrInternalError
@@ -271,6 +267,13 @@ func (s *Service) enrollUser(ctx context.Context, userId int64, offerId int64) e
 	if err != nil {
 		logger.Log.ErrorContext(ctx, err.Error())
 		return common.ErrInternalError
+	}
+
+	if offer.SendRegistrationEmail {
+		err = s.sendEnrollmentEmail(ctx, userEmail, *offer.RegistrationEmailTheme, *offer.RegistrationEmail)
+		if err != nil {
+			logger.Error(ctx, err.Error())
+		}
 	}
 
 	return nil
@@ -285,6 +288,60 @@ func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) 
 	}
 
 	return profile, nil
+}
+
+func (s *Service) ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody) error {
+	// Отформатировать статус
+	status := payments.FormatStatus(payload.Status)
+
+	orderId, err := strconv.ParseInt(payload.OrderId, 10, 64)
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not parse int64 from orderId %s", payload.OrderId), "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	// Получить заказ
+	order, err := s.repo.FindOrderById(ctx, orderId)
+	if err != nil {
+		if !errors.Is(err, common.ErrOrderNotFound) {
+			logger.Error(ctx, fmt.Sprintf("could not get order by id", payload.OrderId), "err", err.Error())
+			return common.ErrInternalError
+		}
+	}
+
+	// Провалидировать данные
+	if order.PaymentID != strconv.Itoa(int(payload.PaymentId)) {
+		logger.Error(ctx, "order payment id not equal with webhook payment id", "order_payment_id", order.PaymentID, "webhook_payment_id", payload.PaymentId)
+		return common.ErrInternalError
+	}
+
+	if order.Price != payload.Amount {
+		logger.Error(ctx, "order price not equal with webhook amount", "order_price", order.Price, "webhook_amount", payload.Amount, "order_id", orderId)
+		return common.ErrInternalError
+	}
+
+	logger.Info(ctx, "got valid order webhook", "orderId", orderId, "status", status)
+
+	// Обновить заказ
+	err = s.repo.UpdateOrderStatus(ctx, orderId, status)
+	if err != nil {
+		return common.ErrInternalError
+	}
+
+	// Выдать пользователю оффер
+	offer, err := s.GetOfferForProcessing(ctx, order.OfferSlug)
+	if err != nil {
+		logger.Error(ctx, "could not find offer for processing", "order_id", order.ID, "offer_slug", order.OfferSlug, "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	err = s.enrollUser(ctx, order.UserID, order.UserEmail, offer)
+	if err != nil {
+		logger.Error(ctx, "could not enroll user", "order", order.ID, "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error {

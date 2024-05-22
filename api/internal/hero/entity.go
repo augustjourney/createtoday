@@ -389,7 +389,7 @@ type Order struct {
 	Status          string           `db:"status"`
 	Error           *json.RawMessage `db:"error"`
 	CardInfo        *json.RawMessage `db:"card_info"`
-	PaymentID       *string          `db:"payment_id"`
+	PaymentID       string           `db:"payment_id"`
 	IntegrationID   int64            `db:"integration_id"`
 	OfferID         int64            `db:"offer_id"`
 	ProjectID       int64            `db:"project_id"`
@@ -400,6 +400,17 @@ type Order struct {
 	SalebotClientID *string          `db:"salebot_client_id"`
 	CreatedAt       time.Time        `db:"created_at"`
 	UpdatedAt       time.Time        `db:"updated_at"`
+}
+
+type OrderForProcessing struct {
+	ID        int64  `db:"id"`
+	Price     uint64 `db:"price"`
+	OfferID   int64  `db:"offer_id"`
+	OfferSlug string `db:"offer_slug"`
+	Status    string `db:"status"`
+	UserID    int64  `db:"user_id"`
+	UserEmail string `db:"user_email"`
+	PaymentID string `db:"payment_id"`
 }
 
 type NewOrder struct {

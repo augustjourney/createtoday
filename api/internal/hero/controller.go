@@ -38,6 +38,9 @@ type IController interface {
 
 	// Offers
 	GetOffer(ctx *fiber.Ctx) error
+
+	// Webhooks
+	TinkoffWebhook(ctx *fiber.Ctx) error
 }
 
 type Controller struct {
@@ -528,6 +531,7 @@ func (c *Controller) ProcessOffer(ctx *fiber.Ctx) error {
 
 	requestId, _ := uuid.NewRandom()
 	rCtx := context.WithValue(context.Background(), "request-id", requestId)
+	rCtx = context.WithValue(rCtx, "request-key", "process-offer")
 
 	result, err := c.service.ProcessOffer(rCtx, body)
 	if err != nil {
@@ -535,6 +539,25 @@ func (c *Controller) ProcessOffer(ctx *fiber.Ctx) error {
 	}
 
 	return common.DoApiResponse(ctx, http.StatusOK, result, nil)
+}
+
+func (c *Controller) TinkoffWebhook(ctx *fiber.Ctx) error {
+	var body TinkoffWebhookBody
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	rCtx := context.Background()
+
+	err = c.service.ProcessTinkoffWebhook(rCtx, body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+	}
+
+	return nil
 }
 
 func NewController(service IService) *Controller {
