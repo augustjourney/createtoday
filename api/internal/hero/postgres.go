@@ -815,6 +815,39 @@ func (r *PostgresRepo) AddUserToGroups(ctx context.Context, userId int64, groupI
 	return tx.Commit()
 }
 
+func (r *PostgresRepo) FindOrderById(ctx context.Context, orderId int64) (*OrderForProcessing, error) {
+	var order OrderForProcessing
+	q := fmt.Sprintf(`
+		select ord.id, ord.offer_id, ord.status, ord.payment_id, ord.price, 
+		       off.slug as offer_slug, ord.user_id, u.email as user_email
+		from %s as ord
+		join %s as off on off.id = ord.offer_id
+		join %s as u on u.id = ord.user_id
+		where ord.id = $1`,
+		OrdersTable, OffersTable, UsersTable)
+	err := r.db.GetContext(ctx, &order, q, orderId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.ErrOrderNotFound
+		}
+		logger.Error(ctx, "could not find order by id", "err", err.Error())
+		return nil, err
+	}
+	return &order, nil
+}
+
+func (r *PostgresRepo) UpdateOrderStatus(ctx context.Context, orderId int64, status string) error {
+	q := fmt.Sprintf(`update %s set status = $2 where id = $1`, OrdersTable)
+	_, err := r.db.ExecContext(ctx, q, orderId, status)
+
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not update order status for order id %s", orderId), "err", err.Error())
+		return err
+	}
+
+	return nil
+}
+
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
 	return &PostgresRepo{
 		db: db,

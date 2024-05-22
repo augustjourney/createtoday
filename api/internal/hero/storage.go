@@ -54,6 +54,8 @@ type Storage interface {
 	// orders
 	CreateOrder(ctx context.Context, order NewOrder) (int64, error)
 	UpdateOrderPaymentId(ctx context.Context, orderId int64, paymentId string) error
+	FindOrderById(ctx context.Context, orderId int64) (*OrderForProcessing, error)
+	UpdateOrderStatus(ctx context.Context, orderId int64, status string) error
 
 	// enrollments
 	AddUserToGroups(ctx context.Context, userId int64, groupIds []int64) error
