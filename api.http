@@ -131,5 +131,22 @@ Accept: application/json
 {
   "email":"{{email}}",
   "phone":"123456789",
-  "selected_pay_method":6
+  "selected_pay_method":1
+}
+
+### Tinkoff Webhook
+POST {{serverAddress}}/hero/webhooks/tinkoff
+Accept: application/json
+
+{
+  "OrderId":"1966",
+  "PaymentId":4448696286,
+  "Success":true,
+  "Status": "CONFIRMED",
+  "Amount":2900,
+  "Pan":"123",
+  "Details":"everything ok",
+  "Message":"Success",
+  "ErrorCode": "333",
+  "ExpirationDate":"2204"
 }
