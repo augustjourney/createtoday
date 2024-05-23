@@ -836,9 +836,12 @@ func (r *PostgresRepo) FindOrderById(ctx context.Context, orderId int64) (*Order
 	return &order, nil
 }
 
-func (r *PostgresRepo) UpdateOrderStatus(ctx context.Context, orderId int64, status string) error {
-	q := fmt.Sprintf(`update %s set status = $2 where id = $1`, OrdersTable)
-	_, err := r.db.ExecContext(ctx, q, orderId, status)
+func (r *PostgresRepo) UpdateOrderStatus(ctx context.Context, orderId int64, status string, orderError OrderError, cardInfo OrderCardInfo) error {
+	q := fmt.Sprintf(`
+		update %s 
+		set status = $2, error = $3, card_info = $4  
+		where id = $1`, OrdersTable)
+	_, err := r.db.ExecContext(ctx, q, orderId, status, orderError, cardInfo)
 
 	if err != nil {
 		logger.Error(ctx, fmt.Sprintf("could not update order status for order id %s", orderId), "err", err.Error())

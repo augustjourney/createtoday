@@ -418,3 +418,14 @@ type NewOrder struct {
 	OfferID       int64 `db:"offer_id"`
 	UserID        int64 `db:"user_id"`
 }
+
+type OrderError struct {
+	StatusCode string `json:"status_code"`
+	Message    string `json:"message"`
+	Details    string `json:"details"`
+}
+
+type OrderCardInfo struct {
+	ExpirationDate string `json:"expiration_date"`
+	Pan            string `json:"pan"`
+}
