@@ -148,5 +148,5 @@ Accept: application/json
   "Details":"everything ok",
   "Message":"Success",
   "ErrorCode": "333",
-  "ExpirationDate":"2204"
+  "ExpDate":"2204"
 }
