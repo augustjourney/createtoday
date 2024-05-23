@@ -109,6 +109,36 @@ var orderCreated = Email{
 	`,
 }
 
+var orderCompleted = Email{
+	Subject:  "Заказ оплачен! 🥳",
+	Template: "default",
+	From: EmailSender{
+		Email: "hello@createtoday.ru",
+		Name:  "CreateToday",
+	},
+	IsActive: true,
+	Type:     "order-completed",
+	Context: map[string]interface{}{
+		"Domain":    "hero.createtoday.ru",
+		"RespondTo": "hello@createtoday.ru",
+	},
+	Body: `
+		<h3>Заказ оплачен! 🥳</h3>
+		<p>Спасибо за доверие!</p>
+		<p style='margin-bottom: 10px !important;'>Твой заказ:
+			<strong>{{ .Context.Ordered }}</strong>
+		</p>
+		<p>Сумма: <strong>{{ .Context.Amount }} рублей</strong></p>
+		<a href='{{ .Context.HeroURL }}' target='_blank' rel='noreferrer noopener' class='btn' >
+			Войти в личный кабинет
+		</a>
+		<p>
+			Если  появятся вопросы, вот наша почта: {{ .Context.RespondTo }}.
+		</p>
+		<p>Успехов, <br />команда create.today</p>
+	`,
+}
+
 var general = Email{
 	Subject:  "",
 	Template: "default",
@@ -137,6 +167,6 @@ func (r *MemoryRepo) FindByType(ctx context.Context, emailType string) (*Email, 
 }
 
 func NewMemoryRepo() *MemoryRepo {
-	emails = append(emails, magicLinkLetter, welcomeLetter, orderCreated, general)
+	emails = append(emails, magicLinkLetter, welcomeLetter, orderCreated, general, orderCompleted)
 	return &MemoryRepo{}
 }
