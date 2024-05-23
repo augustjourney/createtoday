@@ -310,23 +310,43 @@ func (s *Service) ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebh
 	}
 
 	// Провалидировать данные
-	if order.PaymentID != strconv.Itoa(int(payload.PaymentId)) {
-		logger.Error(ctx, "order payment id not equal with webhook payment id", "order_payment_id", order.PaymentID, "webhook_payment_id", payload.PaymentId)
-		return common.ErrInternalError
-	}
-
-	if order.Price != payload.Amount {
-		logger.Error(ctx, "order price not equal with webhook amount", "order_price", order.Price, "webhook_amount", payload.Amount, "order_id", orderId)
-		return common.ErrInternalError
+	err = s.validateTinkoffWebhook(ctx, payload, order)
+	if err != nil {
+		return err
 	}
 
 	logger.Info(ctx, "got valid order webhook", "orderId", orderId, "status", status)
 
 	// Обновить заказ
-	err = s.repo.UpdateOrderStatus(ctx, orderId, status)
+	cardInfo := OrderCardInfo{
+		ExpirationDate: payload.ExpDate,
+		Pan:            payload.Pan,
+	}
+
+	orderError := OrderError{
+		Message:    payload.Message,
+		Details:    payload.Details,
+		StatusCode: payload.ErrorCode,
+	}
+
+	if payload.ErrorCode == "" {
+		orderError.StatusCode = "0"
+	}
+
+	err = s.repo.UpdateOrderStatus(ctx, order.ID, status, orderError, cardInfo)
 	if err != nil {
 		return common.ErrInternalError
 	}
+
+	if status == payments.StatusSucceeded {
+		err = s.processSucceededOrder(ctx, order)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) processSucceededOrder(ctx context.Context, order *OrderForProcessing) error {
 
 	// Выдать пользователю оффер
 	offer, err := s.GetOfferForProcessing(ctx, order.OfferSlug)
@@ -335,9 +355,29 @@ func (s *Service) ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebh
 		return common.ErrInternalError
 	}
 
+	err = s.sendOrderCompletedEmail(ctx, order.UserEmail, offer.Name, offer.Price)
+	if err != nil {
+		logger.Error(ctx, "could not send order completed email", "order", order.ID, "err", err.Error())
+		return common.ErrInternalError
+	}
+
 	err = s.enrollUser(ctx, order.UserID, order.UserEmail, offer)
 	if err != nil {
 		logger.Error(ctx, "could not enroll user", "order", order.ID, "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) validateTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody, order *OrderForProcessing) error {
+	if order.PaymentID != strconv.Itoa(int(payload.PaymentId)) {
+		logger.Error(ctx, "order payment id not equal with webhook payment id", "order_payment_id", order.PaymentID, "webhook_payment_id", payload.PaymentId)
+		return common.ErrInternalError
+	}
+
+	if order.Price != payload.Amount {
+		logger.Error(ctx, "order price not equal with webhook amount", "order_price", order.Price, "webhook_amount", payload.Amount, "order_id", order.ID)
 		return common.ErrInternalError
 	}
 
@@ -803,6 +843,27 @@ func (s *Service) createUser(ctx context.Context, dto CreateUserDTO) (int64, boo
 	}
 
 	return userId, alreadyExists, err
+}
+
+func (s *Service) sendOrderCompletedEmail(ctx context.Context, userEmail string, ordered string, amount uint64) error {
+	email, err := s.emails.GetEmailByType(ctx, "order-completed")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+	}
+
+	email.Context["Ordered"] = ordered
+	email.Context["Amount"] = amount
+	email.Context["HeroURL"] = s.config.HeroAppBaseURL + "/login?way=password&email=" + userEmail
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
 }
 
 func (s *Service) sendWelcomeEmail(ctx context.Context, userEmail string, userPassword string) error {
