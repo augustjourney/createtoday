@@ -557,7 +557,26 @@ func (c *Controller) TinkoffWebhook(ctx *fiber.Ctx) error {
 		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
 	}
 
-	return nil
+	return common.DoApiResponse(ctx, http.StatusOK, nil, nil)
+}
+
+func (c *Controller) ProdamusWebhook(ctx *fiber.Ctx) error {
+	var body ProdamusWebhookBody
+
+	rCtx := context.Background()
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Error(rCtx, "could not process body for prodamus webhook", "err", err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	err = c.service.ProcessProdamusWebhook(rCtx, body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, nil, nil)
 }
 
 func NewController(service IService) *Controller {

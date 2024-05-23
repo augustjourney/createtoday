@@ -70,6 +70,7 @@ func (t *Prodamus) GetPaymentLink(ctx context.Context, payload GetPaymentLinkPay
 
 	result.PaymentURL = string(body)
 	result.PaymentID = paymentId.String()
+	result.OrderID = payload.OrderId
 
 	return &result, nil
 }

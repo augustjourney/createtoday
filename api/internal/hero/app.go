@@ -44,6 +44,7 @@ func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
 	hero.Post("/offers/:slug", controller.ProcessOffer)
 
 	hero.Post("/webhooks/tinkoff", controller.TinkoffWebhook)
+	hero.Post("/webhooks/prodamus", controller.ProdamusWebhook)
 
 	return app
 }

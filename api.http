@@ -131,7 +131,7 @@ Accept: application/json
 {
   "email":"{{email}}",
   "phone":"123456789",
-  "selected_pay_method":1
+  "selected_pay_method":17
 }
 
 ### Tinkoff Webhook
@@ -139,8 +139,8 @@ POST {{serverAddress}}/hero/webhooks/tinkoff
 Accept: application/json
 
 {
-  "OrderId":"1966",
-  "PaymentId":4448696286,
+  "OrderId":"1967",
+  "PaymentId":4453714865,
   "Success":true,
   "Status": "CONFIRMED",
   "Amount":2900,
@@ -149,4 +149,15 @@ Accept: application/json
   "Message":"Success",
   "ErrorCode": "333",
   "ExpDate":"2204"
+}
+
+### Prodamus Webhook
+POST {{serverAddress}}/hero/webhooks/prodamus
+Accept: application/json
+
+{
+  "order_num":"1970",
+  "order_id":"812072ad-b4e8-4800-96f2-3b1d3d414e57",
+  "payment_status": "confirmed",
+  "payment_status_description":"everything ok"
 }

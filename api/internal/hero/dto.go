@@ -213,3 +213,10 @@ type TinkoffWebhookBody struct {
 	ExpDate     string `json:"ExpDate"`
 	Token       string `json:"Token"`
 }
+
+type ProdamusWebhookBody struct {
+	OrderId                  string `json:"order_id"`
+	OrderNum                 string `json:"order_num"`
+	PaymentStatus            string `json:"payment_status"`
+	PaymentStatusDescription string `json:"payment_status_description"`
+}

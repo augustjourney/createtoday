@@ -54,6 +54,7 @@ type IService interface {
 	ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*ProcessOfferResult, error)
 
 	ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody) error
+	ProcessProdamusWebhook(ctx context.Context, payload ProdamusWebhookBody) error
 }
 
 type Claims struct {
@@ -315,7 +316,7 @@ func (s *Service) ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebh
 		return err
 	}
 
-	logger.Info(ctx, "got valid order webhook", "orderId", orderId, "status", status)
+	logger.Info(ctx, "got valid order tinkoff webhook", "orderId", orderId, "status", status)
 
 	// Обновить заказ
 	cardInfo := OrderCardInfo{
@@ -331,6 +332,58 @@ func (s *Service) ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebh
 
 	if payload.ErrorCode == "" {
 		orderError.StatusCode = "0"
+	}
+
+	err = s.repo.UpdateOrderStatus(ctx, order.ID, status, orderError, cardInfo)
+	if err != nil {
+		return common.ErrInternalError
+	}
+
+	if status == payments.StatusSucceeded {
+		err = s.processSucceededOrder(ctx, order)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) ProcessProdamusWebhook(ctx context.Context, payload ProdamusWebhookBody) error {
+	// Отформатировать статус
+	status := payments.FormatStatus(payload.PaymentStatus)
+
+	orderId, err := strconv.ParseInt(payload.OrderNum, 10, 64)
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not parse int64 from orderId %s", payload.OrderId), "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	// Получить заказ
+	order, err := s.repo.FindOrderById(ctx, orderId)
+	if err != nil {
+		if !errors.Is(err, common.ErrOrderNotFound) {
+			logger.Error(ctx, fmt.Sprintf("could not get order by id", orderId), "err", err.Error())
+			return common.ErrInternalError
+		}
+	}
+
+	// Провалидировать данные
+	err = s.validateProdamusWebhook(ctx, payload, order)
+	if err != nil {
+		return err
+	}
+
+	logger.Info(ctx, "got valid order prodamus webhook", "orderId", orderId, "status", status)
+
+	// Обновить заказ
+	cardInfo := OrderCardInfo{}
+
+	orderError := OrderError{
+		Message:    payload.PaymentStatusDescription,
+		StatusCode: "0",
+	}
+
+	if status != payments.StatusSucceeded {
+		orderError.StatusCode = "1"
 	}
 
 	err = s.repo.UpdateOrderStatus(ctx, order.ID, status, orderError, cardInfo)
@@ -364,6 +417,15 @@ func (s *Service) processSucceededOrder(ctx context.Context, order *OrderForProc
 	err = s.enrollUser(ctx, order.UserID, order.UserEmail, offer)
 	if err != nil {
 		logger.Error(ctx, "could not enroll user", "order", order.ID, "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) validateProdamusWebhook(ctx context.Context, payload ProdamusWebhookBody, order *OrderForProcessing) error {
+	if order.PaymentID != payload.OrderId {
+		logger.Error(ctx, "order payment id not equal with webhook payment id", "order_payment_id", order.PaymentID, "webhook_payment_id", payload.OrderId)
 		return common.ErrInternalError
 	}
 
