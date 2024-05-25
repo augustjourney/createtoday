@@ -3,6 +3,7 @@ package hero
 import (
 	"bytes"
 	"context"
+	"createtodayapi/internal/cache"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/logger"
@@ -71,16 +72,38 @@ type Service struct {
 	repo   Storage
 	config *config.Config
 	emails IEmailsService
+	cache  cache.Cache
 }
 
 func (s *Service) GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error) {
-	offer, err := s.repo.GetOfferForRegistration(ctx, offerSlug)
+	offerCacheKey := "offer-" + offerSlug
+
+	offer := &OfferForRegistration{}
+
+	err := s.cache.Get(offerCacheKey, offer)
+
+	if err == nil {
+		return offer, nil
+	}
+
+	if !errors.Is(err, common.ErrCacheItemNotFound) {
+		logger.Error(ctx, "could not get cached offer", "err", err.Error(), "offerSlug", offerSlug)
+	}
+
+	offer, err = s.repo.GetOfferForRegistration(ctx, offerSlug)
+
 	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
 		return nil, err
 	}
 
 	if err != nil {
 		return nil, common.ErrInternalError
+	}
+
+	cacheTTL := time.Minute * 2
+	err = s.cache.Set(offerCacheKey, *offer, &cacheTTL)
+	if err != nil {
+		logger.Error(ctx, "could not set offer in cache", "err", err.Error(), "offerSlug", offerSlug)
 	}
 
 	return offer, nil
@@ -305,7 +328,7 @@ func (s *Service) ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebh
 	order, err := s.repo.FindOrderById(ctx, orderId)
 	if err != nil {
 		if !errors.Is(err, common.ErrOrderNotFound) {
-			logger.Error(ctx, fmt.Sprintf("could not get order by id", payload.OrderId), "err", err.Error())
+			logger.Error(ctx, fmt.Sprintf("could not get order by id %s", payload.OrderId), "err", err.Error())
 			return common.ErrInternalError
 		}
 	}
@@ -361,7 +384,7 @@ func (s *Service) ProcessProdamusWebhook(ctx context.Context, payload ProdamusWe
 	order, err := s.repo.FindOrderById(ctx, orderId)
 	if err != nil {
 		if !errors.Is(err, common.ErrOrderNotFound) {
-			logger.Error(ctx, fmt.Sprintf("could not get order by id", orderId), "err", err.Error())
+			logger.Error(ctx, fmt.Sprintf("could not get order by id %d", orderId), "err", err.Error())
 			return common.ErrInternalError
 		}
 	}
@@ -1221,10 +1244,11 @@ func (s *Service) passwordMatches(hash string, password string) bool {
 	return err == nil
 }
 
-func NewService(repo Storage, config *config.Config, emails IEmailsService) *Service {
+func NewService(repo Storage, config *config.Config, emails IEmailsService, cacheService cache.Cache) *Service {
 	return &Service{
 		repo:   repo,
 		config: config,
 		emails: emails,
+		cache:  cacheService,
 	}
 }
