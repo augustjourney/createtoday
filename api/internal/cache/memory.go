@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"createtodayapi/internal/common"
 	"encoding/json"
 	"sync"
@@ -17,7 +18,7 @@ type MemoryCache struct {
 	mu    sync.RWMutex
 }
 
-func (m *MemoryCache) Get(key string, dest interface{}) error {
+func (m *MemoryCache) Get(ctx context.Context, key string, dest interface{}) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -36,7 +37,7 @@ func (m *MemoryCache) Get(key string, dest interface{}) error {
 	return err
 }
 
-func (m *MemoryCache) Set(key string, val interface{}, exp *time.Duration) error {
+func (m *MemoryCache) Set(ctx context.Context, key string, val interface{}, exp *time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -58,7 +59,7 @@ func (m *MemoryCache) Set(key string, val interface{}, exp *time.Duration) error
 	return nil
 }
 
-func (m *MemoryCache) Delete(key string) error {
+func (m *MemoryCache) Delete(ctx context.Context, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -66,7 +67,7 @@ func (m *MemoryCache) Delete(key string) error {
 	return nil
 }
 
-func (m *MemoryCache) Reset() error {
+func (m *MemoryCache) Reset(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

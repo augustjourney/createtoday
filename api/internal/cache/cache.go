@@ -1,10 +1,13 @@
 package cache
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Cache interface {
-	Get(key string, dest interface{}) error
-	Set(key string, val interface{}, exp *time.Duration) error
-	Delete(key string) error
-	Reset() error
+	Get(ctx context.Context, key string, dest interface{}) error
+	Set(ctx context.Context, key string, val interface{}, exp *time.Duration) error
+	Delete(ctx context.Context, key string) error
+	Reset(ctx context.Context) error
 }

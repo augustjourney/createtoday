@@ -80,7 +80,7 @@ func (s *Service) GetOfferForRegistration(ctx context.Context, offerSlug string)
 
 	offer := &OfferForRegistration{}
 
-	err := s.cache.Get(offerCacheKey, offer)
+	err := s.cache.Get(ctx, offerCacheKey, offer)
 
 	if err == nil {
 		return offer, nil
@@ -101,7 +101,7 @@ func (s *Service) GetOfferForRegistration(ctx context.Context, offerSlug string)
 	}
 
 	cacheTTL := time.Minute * 2
-	err = s.cache.Set(offerCacheKey, *offer, &cacheTTL)
+	err = s.cache.Set(ctx, offerCacheKey, *offer, &cacheTTL)
 	if err != nil {
 		logger.Error(ctx, "could not set offer in cache", "err", err.Error(), "offerSlug", offerSlug)
 	}
