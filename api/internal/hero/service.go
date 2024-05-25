@@ -76,7 +76,7 @@ type Service struct {
 }
 
 func (s *Service) GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error) {
-	offerCacheKey := "offer-" + offerSlug
+	offerCacheKey := cache.GetOfferForRegistrationKey(offerSlug)
 
 	offer := &OfferForRegistration{}
 
