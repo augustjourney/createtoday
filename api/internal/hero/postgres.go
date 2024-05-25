@@ -844,7 +844,7 @@ func (r *PostgresRepo) UpdateOrderStatus(ctx context.Context, orderId int64, sta
 	_, err := r.db.ExecContext(ctx, q, orderId, status, orderError, cardInfo)
 
 	if err != nil {
-		logger.Error(ctx, fmt.Sprintf("could not update order status for order id %s", orderId), "err", err.Error())
+		logger.Error(ctx, fmt.Sprintf("could not update order status for order id %d", orderId), "err", err.Error())
 		return err
 	}
 
