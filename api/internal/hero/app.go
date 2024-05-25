@@ -14,11 +14,11 @@ func NewHeroApp(db *sqlx.DB, redis *redis.Client, config *config.Config, app *fi
 	postgres := NewPostgresRepo(db)
 	memory := NewMemoryRepo()
 
-	// cache := cache.NewRedisCache(redis)
-	memoryCache := cache.NewMemoryCache()
+	redisCache := cache.NewRedisCache(redis)
+	// memoryCache := cache.NewMemoryCache()
 
 	emailsService := NewEmailService(config, memory)
-	service := NewService(postgres, config, emailsService, memoryCache)
+	service := NewService(postgres, config, emailsService, redisCache)
 
 	controller := NewController(service)
 
