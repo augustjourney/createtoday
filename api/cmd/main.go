@@ -41,7 +41,12 @@ func main() {
 		}
 	}
 
-	server := app.New(db, conf)
+	redis, err := infra.InitRedis(conf.RedisHost, conf.RedisPort)
+	if err != nil {
+		log.Error(err.Error())
+	}
+
+	server := app.New(db, redis, conf)
 
 	err = server.Listen(conf.ServerAddress)
 

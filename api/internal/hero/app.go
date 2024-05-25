@@ -1,19 +1,24 @@
 package hero
 
 import (
+	"createtodayapi/internal/cache"
 	"createtodayapi/internal/config"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 )
 
-func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
+func NewHeroApp(db *sqlx.DB, redis *redis.Client, config *config.Config, app *fiber.App) *fiber.App {
 
 	postgres := NewPostgresRepo(db)
 	memory := NewMemoryRepo()
 
+	// cache := cache.NewRedisCache(redis)
+	memoryCache := cache.NewMemoryCache()
+
 	emailsService := NewEmailService(config, memory)
-	service := NewService(postgres, config, emailsService)
+	service := NewService(postgres, config, emailsService, memoryCache)
 
 	controller := NewController(service)
 

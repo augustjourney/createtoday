@@ -34,6 +34,8 @@ type Config struct {
 	TinkoffTestLogin    string `env:"TINKOFF_TEST_LOGIN"`
 	TinkoffTestPassword string `env:"TINKOFF_TEST_PASSWORD"`
 	ProdamusTestLogin   string `env:"PRODAMUS_TEST_LOGIN"`
+	RedisHost           string `env:"REDIS_HOST"`
+	RedisPort           string `env:"REDIS_PORT"`
 }
 
 var config *Config
