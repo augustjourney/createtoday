@@ -54,3 +54,6 @@ var ErrPaymentSystemNotFound = errors.New("Такой платежный мет�
 
 // orders
 var ErrOrderNotFound = errors.New("Такой заказ не найден")
+
+// cache
+var ErrCacheItemNotFound = errors.New("Такое ключ не найден в кэше")
