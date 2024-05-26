@@ -2,7 +2,9 @@ package cache
 
 import (
 	"context"
+	"createtodayapi/internal/common"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -15,6 +17,11 @@ type RedisCache struct {
 func (r *RedisCache) Get(ctx context.Context, key string, dest interface{}) error {
 
 	val, err := r.client.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) {
+		return common.ErrCacheItemNotFound
+	}
+
 	if err != nil {
 		return err
 	}
