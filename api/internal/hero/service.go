@@ -24,6 +24,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// TODO: refactor to small interfaces
 type IService interface {
 	Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error)
 	Login(ctx context.Context, body *LoginBody) (*LoginResult, error)
@@ -56,6 +57,11 @@ type IService interface {
 
 	ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody) error
 	ProcessProdamusWebhook(ctx context.Context, payload ProdamusWebhookBody) error
+
+	GetQuizComments(ctx context.Context, solvedQuizId int64) ([]QuizComment, error)
+	CreateQuizComment(ctx context.Context, dto NewQuizComment) (*QuizComment, error)
+	UpdateQuizComment(ctx context.Context, dto UpdateQuizComment) error
+	DeleteQuizComment(ctx context.Context, quizCommentId int64, authorId int64) error
 }
 
 type Claims struct {
@@ -73,6 +79,81 @@ type Service struct {
 	config *config.Config
 	emails IEmailsService
 	cache  cache.Cache
+}
+
+func (s *Service) CreateQuizComment(ctx context.Context, dto NewQuizComment) (*QuizComment, error) {
+	var comment QuizComment
+
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		logger.Error(ctx, "could not create uuid for new quiz comment", "err", err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	dto.UUID = uid.String()
+
+	commentId, err := s.repo.CreateQuizComment(ctx, dto)
+	if err != nil {
+		logger.Error(ctx, "could not create new quiz comment", "err", err.Error())
+		return nil, err
+	}
+
+	comment.ID = commentId
+	comment.UUID = dto.UUID
+	comment.Text = dto.Text
+	comment.CreatedAt = time.Now()
+	comment.UpdatedAt = time.Now()
+
+	authorProfile, err := s.repo.GetProfileByUserId(ctx, int(dto.AuthorID))
+	if err != nil {
+		logger.Error(ctx, "could not find new quiz comment author profile", "err", err.Error())
+		return nil, err
+	}
+
+	comment.Author = QuizCommentAuthor{
+		FirstName: *authorProfile.FirstName,
+		LastName:  *authorProfile.LastName,
+		Avatar:    *authorProfile.Avatar,
+	}
+
+	return &comment, nil
+}
+
+func (s *Service) GetQuizComments(ctx context.Context, solvedQuizId int64) ([]QuizComment, error) {
+	comments, err := s.repo.GetQuizComments(ctx, solvedQuizId)
+
+	if err != nil {
+		logger.Error(ctx, "could not find quiz comments", "err", err.Error(), "solvedQuizId", solvedQuizId)
+		return comments, common.ErrInternalError
+	}
+
+	return comments, nil
+}
+
+func (s *Service) UpdateQuizComment(ctx context.Context, dto UpdateQuizComment) error {
+	if dto.Text == "" {
+		return common.ErrEmptyQuizCommentText
+	}
+
+	err := s.repo.UpdateQuizComment(ctx, dto)
+
+	if err != nil {
+		logger.Error(ctx, "could not update quiz comment", "err", err.Error(), "quizCommentId", dto.CommentID)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) DeleteQuizComment(ctx context.Context, quizCommentId int64, authorId int64) error {
+	err := s.repo.DeleteQuizComment(ctx, quizCommentId, authorId)
+
+	if err != nil {
+		logger.Error(ctx, "could not delete quiz comment", "err", err.Error(), "quizCommentId", quizCommentId, "authorId", authorId)
+		return common.ErrInternalError
+	}
+
+	return nil
 }
 
 func (s *Service) GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error) {

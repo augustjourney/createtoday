@@ -161,3 +161,31 @@ Accept: application/json
   "payment_status": "confirmed",
   "payment_status_description":"everything ok"
 }
+
+### Get Solved Quiz Comments
+GET {{serverAddress}}/hero/quizzes/{{quizSlug}}/solved/{{solvedQuizId}}/comments
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+### Create Solved Quiz Comment
+POST {{serverAddress}}/hero/quizzes/{{quizSlug}}/solved/{{solvedQuizId}}/comments
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "text":"test quiz comment 2"
+}
+
+### Update Solved Quiz Comment
+PUT {{serverAddress}}/hero/quizzes/{{quizSlug}}/solved/{{solvedQuizId}}/comments/1
+Accept: application/json
+Authorization: Bearer {{auth_token}}
+
+{
+  "text":"test quiz comment updated"
+}
+
+### Delete Solved Quiz Comment
+DELETE {{serverAddress}}/hero/quizzes/{{quizSlug}}/solved/{{solvedQuizId}}/comments/1
+Accept: application/json
+Authorization: Bearer {{auth_token}}

@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
+// TODO: refactor to small interfaces
 type Storage interface {
 	// users
 	FindUserByEmail(ctx context.Context, email string) (*User, error)
@@ -59,4 +60,10 @@ type Storage interface {
 
 	// enrollments
 	AddUserToGroups(ctx context.Context, userId int64, groupIds []int64) error
+
+	// quiz comments
+	GetQuizComments(ctx context.Context, solvedQuizId int64) ([]QuizComment, error)
+	CreateQuizComment(ctx context.Context, dto NewQuizComment) (int64, error)
+	UpdateQuizComment(ctx context.Context, dto UpdateQuizComment) error
+	DeleteQuizComment(ctx context.Context, quizCommentId int64, authorId int64) error
 }

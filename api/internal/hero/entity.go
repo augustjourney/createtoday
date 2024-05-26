@@ -3,6 +3,7 @@ package hero
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -428,4 +429,42 @@ type OrderError struct {
 type OrderCardInfo struct {
 	ExpirationDate string `json:"expiration_date"`
 	Pan            string `json:"pan"`
+}
+
+type QuizComment struct {
+	ID              int64             `db:"id" json:"id"`
+	AuthorID        int64             `db:"-" json:"-"`
+	QuizSolvedID    int64             `db:"-" json:"-"`
+	UUID            string            `db:"uuid" json:"uuid"`
+	Text            string            `db:"text" json:"text"`
+	IsRead          bool              `db:"is_read" json:"is_read"`
+	IsEdited        bool              `db:"is_edited" json:"is_edited"`
+	IsFromModerator bool              `db:"is_from_moderator" json:"is_from_moderator"`
+	CreatedAt       time.Time         `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time         `db:"updated_at" json:"updated_at"`
+	Author          QuizCommentAuthor `db:"author" json:"author"`
+}
+
+type QuizCommentAuthor struct {
+	FirstName string `db:"first_name" json:"first_name"`
+	LastName  string `db:"last_name" json:"last_name"`
+	Avatar    string `db:"avatar" json:"avatar"`
+}
+
+func (q *QuizCommentAuthor) Scan(v interface{}) error {
+	switch vv := v.(type) {
+	case []byte:
+		return json.Unmarshal(vv, q)
+	case string:
+		return json.Unmarshal([]byte(vv), q)
+	default:
+		return fmt.Errorf("unsupported type: %T", v)
+	}
+}
+
+type NewQuizComment struct {
+	AuthorID     int64  `db:"author_id" json:"author_id"`
+	QuizSolvedID int64  `db:"quiz_solved_id" json:"quiz_solved_id"`
+	UUID         string `db:"uuid" json:"uuid"`
+	Text         string `db:"text" json:"text"`
 }

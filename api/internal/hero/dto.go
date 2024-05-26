@@ -220,3 +220,9 @@ type ProdamusWebhookBody struct {
 	PaymentStatus            string `json:"payment_status"`
 	PaymentStatusDescription string `json:"payment_status_description"`
 }
+
+type UpdateQuizComment struct {
+	AuthorID  int64  `db:"author_id" json:"author_id"`
+	CommentID int64  `db:"comment_id" json:"comment_id"`
+	Text      string `json:"text"`
+}

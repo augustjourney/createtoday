@@ -57,3 +57,6 @@ var ErrOrderNotFound = errors.New("Такой заказ не найден")
 
 // cache
 var ErrCacheItemNotFound = errors.New("Такое ключ не найден в кэше")
+
+// quiz comments
+var ErrEmptyQuizCommentText = errors.New("Комментарий не может быть пустым")

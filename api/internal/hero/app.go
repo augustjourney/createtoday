@@ -51,5 +51,10 @@ func NewHeroApp(db *sqlx.DB, redis *redis.Client, config *config.Config, app *fi
 	hero.Post("/webhooks/tinkoff", controller.TinkoffWebhook)
 	hero.Post("/webhooks/prodamus", controller.ProdamusWebhook)
 
+	hero.Get("/quizzes/:slug/solved/:id/comments", AuthMiddleware(service), controller.GetQuizComments)
+	hero.Post("/quizzes/:slug/solved/:id/comments", AuthMiddleware(service), controller.CreateQuizComment)
+	hero.Put("/quizzes/:slug/solved/:id/comments/:commentId", AuthMiddleware(service), controller.UpdateQuizComment)
+	hero.Delete("/quizzes/:slug/solved/:id/comments/:commentId", AuthMiddleware(service), controller.DeleteQuizComment)
+
 	return app
 }

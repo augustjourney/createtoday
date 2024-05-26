@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -577,6 +578,88 @@ func (c *Controller) ProdamusWebhook(ctx *fiber.Ctx) error {
 	}
 
 	return common.DoApiResponse(ctx, http.StatusOK, nil, nil)
+}
+
+func (c *Controller) GetQuizComments(ctx *fiber.Ctx) error {
+	solvedQuizId, err := strconv.ParseInt(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+	comments, err := c.service.GetQuizComments(context.Background(), solvedQuizId)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, comments, nil)
+}
+
+func (c *Controller) CreateQuizComment(ctx *fiber.Ctx) error {
+	solvedQuizId, err := strconv.ParseInt(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	var body NewQuizComment
+	err = json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+
+	body.AuthorID = int64(user.ID)
+	body.QuizSolvedID = solvedQuizId
+
+	newComment, err := c.service.CreateQuizComment(context.Background(), body)
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, newComment, err)
+}
+
+func (c *Controller) UpdateQuizComment(ctx *fiber.Ctx) error {
+	commentId, err := strconv.ParseInt(ctx.Params("commentId"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	var body UpdateQuizComment
+	err = json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+
+	body.AuthorID = int64(user.ID)
+	body.CommentID = commentId
+
+	err = c.service.UpdateQuizComment(context.Background(), body)
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, true, err)
+}
+
+func (c *Controller) DeleteQuizComment(ctx *fiber.Ctx) error {
+	commentId, err := strconv.ParseInt(ctx.Params("commentId"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+
+	err = c.service.DeleteQuizComment(context.Background(), commentId, int64(user.ID))
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, true, err)
 }
 
 func NewController(service IService) *Controller {

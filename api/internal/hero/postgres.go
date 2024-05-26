@@ -32,6 +32,7 @@ const OffersTable = "public.offer"
 const PayIntegrationsTable = "public.pay_integration"
 const OrdersTable = "public.order"
 const OffersGroupsTable = "public.offer_group"
+const QuizCommentsTable = "public.quiz_comment"
 
 type PostgresRepo struct {
 	db *sqlx.DB
@@ -845,6 +846,90 @@ func (r *PostgresRepo) UpdateOrderStatus(ctx context.Context, orderId int64, sta
 
 	if err != nil {
 		logger.Error(ctx, fmt.Sprintf("could not update order status for order id %d", orderId), "err", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) GetQuizComments(ctx context.Context, solvedQuizId int64) ([]QuizComment, error) {
+	q := fmt.Sprintf(`
+		select c.id, c.text, c.is_read, c.is_from_moderator, c.is_edited, c.created_at, c.updated_at, c.uuid,
+		json_build_object(
+			'first_name', u.first_name,
+			'last_name', u.last_name,
+			'avatar', u.avatar
+		) as author
+		from %s as c
+		join %s as u on u.id = c.author_id
+		where c.quiz_solved_id = $1
+		order by c.created_at asc
+	`, QuizCommentsTable, UsersTable)
+
+	comments := make([]QuizComment, 0)
+
+	err := r.db.SelectContext(ctx, &comments, q, solvedQuizId)
+
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not get quiz comments, solved quiz id %d", solvedQuizId), "err", err.Error())
+		return make([]QuizComment, 0), err
+	}
+
+	return comments, nil
+}
+
+func (r *PostgresRepo) CreateQuizComment(ctx context.Context, dto NewQuizComment) (int64, error) {
+	q := fmt.Sprintf(`
+		insert into %s (author_id, quiz_solved_id, uuid, text)
+		values (:author_id, :quiz_solved_id, :uuid, :text)
+		returning id;
+	`, QuizCommentsTable)
+
+	query, args, err := r.db.BindNamed(q, dto)
+
+	if err != nil {
+		logger.Error(ctx, err.Error(), "where", "CreateQuizComment.bindNamed()")
+		return 0, err
+	}
+
+	var commentId int64
+
+	err = r.db.GetContext(ctx, &commentId, query, args...)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateQuizComment.GetContext()")
+		return 0, err
+	}
+
+	return commentId, nil
+}
+
+func (r *PostgresRepo) UpdateQuizComment(ctx context.Context, dto UpdateQuizComment) error {
+	q := fmt.Sprintf(`
+		update %s
+		set text = $2, updated_at = now()
+		where id = $1 and author_id = $3
+	`, QuizCommentsTable)
+
+	_, err := r.db.ExecContext(ctx, q, dto.CommentID, dto.Text, dto.AuthorID)
+
+	if err != nil {
+		logger.Error(ctx, err.Error(), "where", "hero.postgres.UpdateQuizComment")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) DeleteQuizComment(ctx context.Context, quizCommentId int64, authorId int64) error {
+	q := fmt.Sprintf(`
+		delete from %s
+		where id = $1 and author_id = $2
+	`, QuizCommentsTable)
+
+	_, err := r.db.ExecContext(ctx, q, quizCommentId, authorId)
+
+	if err != nil {
+		logger.Error(ctx, err.Error(), "where", "hero.postgres.DeleteQuizComment")
 		return err
 	}
 
