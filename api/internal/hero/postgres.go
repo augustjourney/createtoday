@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 const UsersTable = "public.user"
@@ -27,6 +28,11 @@ const RelatedMediaTable = "public.related_media"
 const SolvedQuizzesTable = "public.quiz_solved"
 const SolvedQuizzesView = "public._solvedquizzes"
 const CompletedLessonsTable = "public.completed_lessons"
+const OffersTable = "public.offer"
+const PayIntegrationsTable = "public.pay_integration"
+const OrdersTable = "public.order"
+const OffersGroupsTable = "public.offer_group"
+const QuizCommentsTable = "public.quiz_comment"
 
 type PostgresRepo struct {
 	db *sqlx.DB
@@ -115,24 +121,41 @@ func (r *PostgresRepo) UpdatePassword(ctx context.Context, userId int, password 
 	return nil
 }
 
-func (r *PostgresRepo) CreateUser(ctx context.Context, user User) error {
+func (r *PostgresRepo) CreateUser(ctx context.Context, user User) (int64, error) {
 	q := fmt.Sprintf(`
 		insert into %s (email, password, first_name)
-		values ($1, $2, $3)
+		values (:email, :password, :first_name);
 	`, UsersTable)
-	_, err := r.db.ExecContext(ctx, q, user.Email, user.Password, user.FirstName)
+
+	query, args, err := r.db.BindNamed(q, user)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateUser.bindNamed()")
+		return 0, err
+	}
+
+	var userId int64
+
+	err = r.db.GetContext(ctx, &userId, query, args...)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == pgerrcode.UniqueViolation {
-				return common.ErrUserAlreadyExists
-			}
+		if !errors.As(err, &pgErr) {
+			logger.Log.Error(err.Error(), "where", "CreateUser.GetContext()")
+			return 0, err
 		}
-		return err
+
+		if pgErr.Code == pgerrcode.UniqueViolation {
+			q2 := fmt.Sprintf(`select id from %s where email = $1`, UsersTable)
+			err = r.db.GetContext(ctx, &userId, q2, user.Email)
+			if err != nil {
+				return 0, err
+			}
+			return userId, common.ErrUserAlreadyExists
+		}
 	}
 
-	return err
+	return userId, nil
 }
 
 func (r *PostgresRepo) GetUserAccessibleProducts(ctx context.Context, userId int) ([]ProductCard, error) {
@@ -566,6 +589,347 @@ func (r *PostgresRepo) DeleteSolvedQuiz(ctx context.Context, solvedQuizId int64,
 	err = tx.Commit()
 	if err != nil {
 		logger.Log.Error(err.Error(), "where", "hero.postgres.DeleteSolvedQuiz.Commit")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) GetOfferForRegistration(ctx context.Context, slug string) (*OfferForRegistration, error) {
+	q := fmt.Sprintf(`
+		select o.name, o.slug, o.price, o.is_free, o.description, o.ask_for_phone, o.ask_for_comment, o.currency, o.settings, 
+		       o.oferta_url, o.agreement_url, o.privacy_url, o.can_use_promocode, 
+		       o.ask_for_telegram, o.ask_for_instagram, o.is_donate, o.min_donate_price, o_pm.pay_methods, json_array_length(o_pm.pay_methods) > 0 as can_process
+		from %s as o
+		left join lateral (
+			select 
+				json_agg(
+					json_build_object(
+		    			'id', pm.id,
+						'name', pm.name, 
+						'type', pm.type
+					)
+				) as pay_methods
+			from %s as pm
+			where pm.project_id = o.project_id 
+			and pm.is_active = true
+		) as o_pm on true
+		where o.slug = $1; 
+	`, OffersTable, PayIntegrationsTable)
+
+	var offer OfferForRegistration
+
+	err := r.db.GetContext(ctx, &offer, q, slug)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, common.ErrOfferNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.FindOfferBySlug")
+		return nil, err
+	}
+
+	return &offer, nil
+}
+
+func (r *PostgresRepo) GetOfferForProcessing(ctx context.Context, slug string) (*OfferForProcessing, error) {
+	q := fmt.Sprintf(`
+		select o.id, o.name, o.slug, o.price, o.is_free, o.currency, o.settings, 
+		       o.can_use_promocode, o.is_donate, o.min_donate_price,
+		       o.success_message, o.redirect_url, o.registration_email_theme,
+		       o.send_order_created, o.send_order_completed, o.send_registration_email, o.registration_email,
+		       o.project_id, o.send_welcome_email, o.send_to_salebot, o.salebot_callback_text
+		from %s as o
+		where o.slug = $1
+		group by o.id; 
+	`, OffersTable)
+
+	var offer OfferForProcessing
+
+	err := r.db.GetContext(ctx, &offer, q, slug)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, common.ErrOfferNotFound
+	}
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.GetOfferForProcessing")
+		return nil, err
+	}
+
+	return &offer, nil
+}
+
+func (r *PostgresRepo) GetPayMethods(ctx context.Context, projectId int64) ([]PayMethod, error) {
+	q := fmt.Sprintf(`
+		select name, type FROM %s
+		where project_id = $1 and is_active is true;
+	`, PayIntegrationsTable)
+
+	var payMethods []PayMethod
+
+	err := r.db.SelectContext(ctx, &payMethods, q, projectId)
+	if err != nil {
+		logger.Log.Error("could not get pay methods", "err", err, "where", "hero.postgres.GetPayMethods")
+		return make([]PayMethod, 0), err
+	}
+
+	return payMethods, nil
+}
+
+func (r *PostgresRepo) GetPayMethod(ctx context.Context, payMethodId int64, projectId int64) (*PayIntegration, error) {
+	q := fmt.Sprintf(`
+		select id, name, type, login, password, send_receipt, receipt_settings
+		from %s as pm
+		where is_active = true and id = $1 and project_id = $2;
+	`, PayIntegrationsTable)
+
+	var payMethod PayIntegration
+
+	err := r.db.GetContext(ctx, &payMethod, q, payMethodId, projectId)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.GetPayMethod")
+		return nil, common.ErrPaymentSystemNotFound
+	}
+
+	return &payMethod, err
+}
+
+func (r *PostgresRepo) CreateOrder(ctx context.Context, order NewOrder) (int64, error) {
+	q := fmt.Sprintf(`
+		insert into %s (integration_id, offer_id, user_id, description, project_id, price, currency)
+		select :integration_id, :offer_id, :user_id, name, project_id, price, currency
+		from %s where id = :offer_id
+		returning id;
+	`, OrdersTable, OffersTable)
+
+	query, args, err := r.db.BindNamed(q, order)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateOrder.bindNamed()")
+		return 0, err
+	}
+
+	var orderId int64
+
+	err = r.db.GetContext(ctx, &orderId, query, args...)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateOrder.GetContext()")
+		return 0, err
+	}
+
+	return orderId, nil
+}
+
+func (r *PostgresRepo) UpdateOrderPaymentId(ctx context.Context, orderId int64, paymentId string) error {
+	q := fmt.Sprintf(`update %s set payment_id = $2 where id = $1`, OrdersTable)
+
+	_, err := r.db.ExecContext(ctx, q, orderId, paymentId)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "UpdateOrderPaymentId.Exec()")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) UpdateUserInfo(ctx context.Context, dto UpdateUserInfoDTO) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "UpdateUserInfo.BeginTx()")
+		return err
+	}
+
+	if dto.Phone != "" {
+		q1 := fmt.Sprintf(`update %s set phone = $2 where id = $1`, UsersTable)
+		_, err = tx.ExecContext(ctx, q1, dto.UserID, dto.Phone)
+		if err != nil {
+			logger.Log.Error(err.Error(), "where", "UpdateUserInfo.q1()")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	if dto.Telegram != "" {
+		q2 := fmt.Sprintf(`update %s set telegram = $2 where id = $1`, UsersTable)
+		_, err = tx.ExecContext(ctx, q2, dto.UserID, dto.Telegram)
+		if err != nil {
+			logger.Log.Error(err.Error(), "where", "UpdateUserInfo.q2()")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	if dto.Instagram != "" {
+		q3 := fmt.Sprintf(`update %s set instagram = $2 where id = $1`, UsersTable)
+		_, err = tx.ExecContext(ctx, q3, dto.UserID, dto.Instagram)
+		if err != nil {
+			logger.Log.Error(err.Error(), "where", "UpdateUserInfo.q3()")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *PostgresRepo) GetOfferGroups(ctx context.Context, offerId int64) ([]int64, error) {
+	var groups []int64
+
+	q := fmt.Sprintf(`select array_agg(group_id) as groups from %s where offer_id = $1 group by offer_id`, OffersGroupsTable)
+
+	err := r.db.GetContext(ctx, pq.Array(&groups), q, offerId)
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "hero.postgres.GetOfferGroups")
+		return make([]int64, 0), err
+	}
+
+	return groups, nil
+}
+
+func (r *PostgresRepo) AddUserToGroups(ctx context.Context, userId int64, groupIds []int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error(), "where", "AddUserToGroups.BeginTx")
+		return err
+	}
+
+	for _, groupId := range groupIds {
+		q := fmt.Sprintf(`
+			insert into %s
+			(user_id, group_id, status)
+			values ($1, $2, 'active')
+			on conflict (user_id, group_id, status) do nothing;
+		`, UserGroupsTable)
+
+		_, err = tx.ExecContext(ctx, q, userId, groupId)
+		if err != nil {
+			logger.Log.ErrorContext(ctx, err.Error(), "where", "AddUserToGroups.ExecContext")
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *PostgresRepo) FindOrderById(ctx context.Context, orderId int64) (*OrderForProcessing, error) {
+	var order OrderForProcessing
+	q := fmt.Sprintf(`
+		select ord.id, ord.offer_id, ord.status, ord.payment_id, ord.price, 
+		       off.slug as offer_slug, ord.user_id, u.email as user_email
+		from %s as ord
+		join %s as off on off.id = ord.offer_id
+		join %s as u on u.id = ord.user_id
+		where ord.id = $1`,
+		OrdersTable, OffersTable, UsersTable)
+	err := r.db.GetContext(ctx, &order, q, orderId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.ErrOrderNotFound
+		}
+		logger.Error(ctx, "could not find order by id", "err", err.Error())
+		return nil, err
+	}
+	return &order, nil
+}
+
+func (r *PostgresRepo) UpdateOrderStatus(ctx context.Context, orderId int64, status string, orderError OrderError, cardInfo OrderCardInfo) error {
+	q := fmt.Sprintf(`
+		update %s 
+		set status = $2, error = $3, card_info = $4  
+		where id = $1`, OrdersTable)
+	_, err := r.db.ExecContext(ctx, q, orderId, status, orderError, cardInfo)
+
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not update order status for order id %d", orderId), "err", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) GetQuizComments(ctx context.Context, solvedQuizId int64) ([]QuizComment, error) {
+	q := fmt.Sprintf(`
+		select c.id, c.text, c.is_read, c.is_from_moderator, c.is_edited, c.created_at, c.updated_at, c.uuid,
+		json_build_object(
+			'first_name', u.first_name,
+			'last_name', u.last_name,
+			'avatar', u.avatar
+		) as author
+		from %s as c
+		join %s as u on u.id = c.author_id
+		where c.quiz_solved_id = $1
+		order by c.created_at asc
+	`, QuizCommentsTable, UsersTable)
+
+	comments := make([]QuizComment, 0)
+
+	err := r.db.SelectContext(ctx, &comments, q, solvedQuizId)
+
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not get quiz comments, solved quiz id %d", solvedQuizId), "err", err.Error())
+		return make([]QuizComment, 0), err
+	}
+
+	return comments, nil
+}
+
+func (r *PostgresRepo) CreateQuizComment(ctx context.Context, dto NewQuizComment) (int64, error) {
+	q := fmt.Sprintf(`
+		insert into %s (author_id, quiz_solved_id, uuid, text)
+		values (:author_id, :quiz_solved_id, :uuid, :text)
+		returning id;
+	`, QuizCommentsTable)
+
+	query, args, err := r.db.BindNamed(q, dto)
+
+	if err != nil {
+		logger.Error(ctx, err.Error(), "where", "CreateQuizComment.bindNamed()")
+		return 0, err
+	}
+
+	var commentId int64
+
+	err = r.db.GetContext(ctx, &commentId, query, args...)
+	if err != nil {
+		logger.Log.Error(err.Error(), "where", "CreateQuizComment.GetContext()")
+		return 0, err
+	}
+
+	return commentId, nil
+}
+
+func (r *PostgresRepo) UpdateQuizComment(ctx context.Context, dto UpdateQuizComment) error {
+	q := fmt.Sprintf(`
+		update %s
+		set text = $2, updated_at = now()
+		where id = $1 and author_id = $3
+	`, QuizCommentsTable)
+
+	_, err := r.db.ExecContext(ctx, q, dto.CommentID, dto.Text, dto.AuthorID)
+
+	if err != nil {
+		logger.Error(ctx, err.Error(), "where", "hero.postgres.UpdateQuizComment")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresRepo) DeleteQuizComment(ctx context.Context, quizCommentId int64, authorId int64) error {
+	q := fmt.Sprintf(`
+		delete from %s
+		where id = $1 and author_id = $2
+	`, QuizCommentsTable)
+
+	_, err := r.db.ExecContext(ctx, q, quizCommentId, authorId)
+
+	if err != nil {
+		logger.Error(ctx, err.Error(), "where", "hero.postgres.DeleteQuizComment")
 		return err
 	}
 

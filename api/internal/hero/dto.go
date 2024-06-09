@@ -151,3 +151,78 @@ type SolveQuizDTO struct {
 	QuizSlug string
 	Media    []FileUpload
 }
+
+type CreateUserDTO struct {
+	FirstName string `json:"first_name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+}
+
+// TODO: сделать валидацию
+// Получить оффер из бд
+// Проверить обязательные поля — ask_for_telegram, ask_for_instagram, ask_for_phone
+// По умолчанию обязательные поля — email, first_name, selected_pay_method
+type ProcessOfferDTO struct {
+	Slug              string `json:"slug"`
+	UserID            int64  `json:"user_id"`
+	FirstName         string `json:"first_name"`
+	LastName          string `json:"last_name"`
+	Email             string `json:"email"`
+	Phone             string `json:"phone"`
+	Telegram          string `json:"telegram" db:"telegram"`
+	Instagram         string `json:"instagram" db:"instagram"`
+	Comment           string `json:"comment"`
+	SelectedPayMethod int64  `json:"selected_pay_method" db:"selected_pay_method"`
+}
+
+type ProcessOfferResult struct {
+	Message     string `json:"message"`
+	RedirectURL string `json:"redirect_url"`
+}
+
+type CreatePaymentDTO struct {
+	PayMethod        *PayIntegration
+	UserID           int64
+	Email            string
+	Phone            string
+	OrderDescription string
+	OfferID          int64
+	Price            uint64
+}
+
+type UpdateUserInfoDTO struct {
+	UserID    int64  `json:"user_id" db:"user_id"`
+	Phone     string `json:"phone" db:"phone"`
+	Telegram  string `json:"telegram" db:"telegram"`
+	Instagram string `json:"instagram" db:"instagram"`
+}
+
+type TinkoffWebhookBody struct {
+	TerminalKey string `json:"TerminalKey"`
+	Amount      uint64 `json:"Amount"`
+	OrderId     string `json:"OrderId"`
+	Success     bool   `json:"Success"`
+	Status      string `json:"Status"`
+	PaymentId   int64  `json:"PaymentId"`
+	ErrorCode   string `json:"ErrorCode"`
+	Message     string `json:"Message"`
+	Details     string `json:"Details"`
+	RebillId    int64  `json:"RebillId"`
+	CardId      int    `json:"CardId"`
+	Pan         string `json:"Pan"`
+	ExpDate     string `json:"ExpDate"`
+	Token       string `json:"Token"`
+}
+
+type ProdamusWebhookBody struct {
+	OrderId                  string `json:"order_id"`
+	OrderNum                 string `json:"order_num"`
+	PaymentStatus            string `json:"payment_status"`
+	PaymentStatusDescription string `json:"payment_status_description"`
+}
+
+type UpdateQuizComment struct {
+	AuthorID  int64  `db:"author_id" json:"author_id"`
+	CommentID int64  `db:"comment_id" json:"comment_id"`
+	Text      string `json:"text"`
+}

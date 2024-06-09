@@ -3,113 +3,93 @@ package config
 import (
 	"createtodayapi/internal/logger"
 	"flag"
-	"os"
-	"time"
-
+	"github.com/caarlos0/env/v9"
 	"github.com/joho/godotenv"
+	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
 type Config struct {
-	BaseURL            string        `env:"BASE_URL"`
-	ServerAddress      string        `env:"SERVER_ADDRESS"`
-	DatabaseDSN        string        `env:"DATABASE_DSN"`
-	JwtTokenExp        time.Duration `env:"JWT_TOKEN_EXP"`
-	MagicLinkExp       time.Duration `env:"MAGIC_LINK_EXP"`
-	JwtTokenSecretKey  string        `env:"JWT_TOKEN_SECRET_KEY"`
-	JwtSigningMethod   jwt.SigningMethod
-	HeroAppBaseURL     string `env:"HERO_APP_BASE_URL"`
-	AwsSecretAccessKey string `env:"AWS_SECRET_ACCESS_KEY"`
-	AwsAccessKeyId     string `env:"AWS_ACCESS_KEY_ID"`
-	AwsRegion          string `env:"AWS_REGION"`
-	Env                string `env:"ENV"` // dev, stage, prod
-	S3Endpoint         string `env:"S3_ENDPOINT"`
-	S3Region           string `env:"S3_REGION"`
-	S3AccessKeyId      string `env:"S3_ACCESS_KEY_ID"`
-	S3SecretAccessKey  string `env:"S3_SECRET_ACCESS_KEY"`
-	CdnUrl             string `env:"CDN_URL"`
-	PhotosBucket       string `env:"PHOTOS_BUCKET"`
-	VideosBucket       string `env:"VIDEOS_BUCKET"`
-	S3Provider         string `env:"S3_PROVIDER"`
+	BaseURL             string
+	ServerAddress       string
+	DatabaseDSN         string `env:"DATABASE_DSN"`
+	JwtTokenExp         time.Duration
+	MagicLinkExp        time.Duration
+	JwtTokenSecretKey   string `env:"JWT_TOKEN_SECRET_KEY"`
+	JwtSigningMethod    jwt.SigningMethod
+	HeroAppBaseURL      string `env:"HERO_APP_BASE_URL"`
+	AwsSecretAccessKey  string `env:"AWS_SECRET_ACCESS_KEY"`
+	AwsAccessKeyId      string `env:"AWS_ACCESS_KEY_ID"`
+	AwsRegion           string `env:"AWS_REGION"`
+	Env                 string `env:"ENV"` // dev, stage, prod
+	S3Endpoint          string
+	S3Region            string
+	S3AccessKeyId       string `env:"S3_ACCESS_KEY_ID"`
+	S3SecretAccessKey   string `env:"S3_SECRET_ACCESS_KEY"`
+	CdnUrl              string `env:"CDN_URL"`
+	PhotosBucket        string
+	VideosBucket        string
+	S3Provider          string
+	TinkoffTestLogin    string `env:"TINKOFF_TEST_LOGIN"`
+	TinkoffTestPassword string `env:"TINKOFF_TEST_PASSWORD"`
+	ProdamusTestLogin   string `env:"PRODAMUS_TEST_LOGIN"`
+	RedisHost           string `env:"REDIS_HOST"`
+	RedisPort           string `env:"REDIS_PORT"`
 }
 
-var config Config
+var config *Config
 
-func init() {
-	if err := godotenv.Load(); err != nil {
-		logger.Log.Error("No .env file found")
+func (c *Config) loadEnv(path string) {
+	if path == "" {
+		path = ".env"
+	}
+	err := godotenv.Load(path)
+	if err != nil {
+		logger.Log.Error("No .env file found", "error", err.Error())
 	}
 }
 
-func New() *Config {
+func (c *Config) parseEnv() {
 	var flagServerAddress = flag.String("a", "localhost:8080", "Server address on which server is running")
 	var flagDatabaseDSN = flag.String("d", "", "Database DSN")
 	var flagEnv = flag.String("e", "", "Environment")
 
-	config.JwtSigningMethod = jwt.SigningMethodHS256
-	config.JwtTokenExp = time.Hour * 720
-	config.MagicLinkExp = time.Minute * 1
-	config.ServerAddress = *flagServerAddress
-	config.Env = "dev"
-	config.S3Endpoint = "https://s3.storage.selcloud.ru"
-	config.S3Region = "ru-1a"
-	config.PhotosBucket = "photos"
-	config.VideosBucket = "videos"
-	config.S3Provider = "selectel"
+	c.JwtSigningMethod = jwt.SigningMethodHS256
+	c.JwtTokenExp = time.Hour * 720
+	c.MagicLinkExp = time.Minute * 1
+	c.ServerAddress = *flagServerAddress
+	c.Env = "dev"
+	c.S3Endpoint = "https://s3.storage.selcloud.ru"
+	c.S3Region = "ru-1a"
+	c.PhotosBucket = "photos"
+	c.VideosBucket = "videos"
+	c.S3Provider = "selectel"
 
-	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
-		config.DatabaseDSN = databaseDSN
+	err := env.Parse(c)
+	if err != nil {
+		logger.Log.Error("could not parse env vars:", "error", err)
 	}
 
 	if *flagDatabaseDSN != "" {
-		config.DatabaseDSN = *flagDatabaseDSN
-	}
-
-	if env := os.Getenv("ENV"); env != "" {
-		config.Env = env
+		c.DatabaseDSN = *flagDatabaseDSN
 	}
 
 	if *flagEnv != "" {
-		config.Env = *flagEnv
+		c.Env = *flagEnv
+	}
+}
+
+func New(pathToEnv string) *Config {
+	if config != nil {
+		return config
 	}
 
-	if JwtTokenSecretKey := os.Getenv("JWT_TOKEN_SECRET_KEY"); JwtTokenSecretKey != "" {
-		config.JwtTokenSecretKey = JwtTokenSecretKey
-	}
+	config = &Config{}
 
-	if HeroAppBaseURL := os.Getenv("HERO_APP_BASE_URL"); HeroAppBaseURL != "" {
-		config.HeroAppBaseURL = HeroAppBaseURL
-	}
+	config.loadEnv(pathToEnv)
+	config.parseEnv()
 
-	if AwsSecretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY"); AwsSecretAccessKey != "" {
-		config.AwsSecretAccessKey = AwsSecretAccessKey
-	}
-
-	if AwsAccessKeyId := os.Getenv("AWS_ACCESS_KEY_ID"); AwsAccessKeyId != "" {
-		config.AwsAccessKeyId = AwsAccessKeyId
-	}
-
-	if AwsRegion := os.Getenv("AWS_REGION"); AwsRegion != "" {
-		config.AwsRegion = AwsRegion
-	}
-
-	if S3AccessKeyId := os.Getenv("S3_ACCESS_KEY_ID"); S3AccessKeyId != "" {
-		config.S3AccessKeyId = S3AccessKeyId
-	}
-
-	if S3SecretAccessKey := os.Getenv("S3_SECRET_ACCESS_KEY"); S3SecretAccessKey != "" {
-		config.S3SecretAccessKey = S3SecretAccessKey
-	}
-
-	if CdnUrl := os.Getenv("CDN_URL"); CdnUrl != "" {
-		config.CdnUrl = CdnUrl
-	}
-
-	if PhotosBucket := os.Getenv("PHOTOS_BUCKET"); PhotosBucket != "" {
-		config.PhotosBucket = PhotosBucket
-	}
-
-	return &config
+	return config
 
 }

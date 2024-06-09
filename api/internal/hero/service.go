@@ -3,14 +3,19 @@ package hero
 import (
 	"bytes"
 	"context"
+	"createtodayapi/internal/cache"
 	"createtodayapi/internal/common"
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/logger"
+	"createtodayapi/internal/payments"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image/jpeg"
+	"math/big"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -19,6 +24,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// TODO: refactor to small interfaces
 type IService interface {
 	Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error)
 	Login(ctx context.Context, body *LoginBody) (*LoginResult, error)
@@ -44,6 +50,18 @@ type IService interface {
 	SolveQuiz(ctx context.Context, dto SolveQuizDTO) error
 	GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
 	DeleteSolvedQuiz(ctx context.Context, quizSlug string, userId int) error
+
+	GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error)
+	GetOfferForProcessing(ctx context.Context, offerSlug string) (*OfferForProcessing, error)
+	ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*ProcessOfferResult, error)
+
+	ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody) error
+	ProcessProdamusWebhook(ctx context.Context, payload ProdamusWebhookBody) error
+
+	GetQuizComments(ctx context.Context, solvedQuizId int64) ([]QuizComment, error)
+	CreateQuizComment(ctx context.Context, dto NewQuizComment) (*QuizComment, error)
+	UpdateQuizComment(ctx context.Context, dto UpdateQuizComment) error
+	DeleteQuizComment(ctx context.Context, quizCommentId int64, authorId int64) error
 }
 
 type Claims struct {
@@ -52,10 +70,7 @@ type Claims struct {
 }
 
 const (
-	MediaStatusUploaded = "uploaded"
-)
-
-const (
+	MediaStatusUploaded        = "uploaded"
 	RelatedMediaTypeSolvedQuiz = "solved_quiz"
 )
 
@@ -63,6 +78,310 @@ type Service struct {
 	repo   Storage
 	config *config.Config
 	emails IEmailsService
+	cache  cache.Cache
+}
+
+func (s *Service) CreateQuizComment(ctx context.Context, dto NewQuizComment) (*QuizComment, error) {
+	var comment QuizComment
+
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		logger.Error(ctx, "could not create uuid for new quiz comment", "err", err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	dto.UUID = uid.String()
+
+	commentId, err := s.repo.CreateQuizComment(ctx, dto)
+	if err != nil {
+		logger.Error(ctx, "could not create new quiz comment", "err", err.Error())
+		return nil, err
+	}
+
+	comment.ID = commentId
+	comment.UUID = dto.UUID
+	comment.Text = dto.Text
+	comment.CreatedAt = time.Now()
+	comment.UpdatedAt = time.Now()
+
+	authorProfile, err := s.repo.GetProfileByUserId(ctx, int(dto.AuthorID))
+	if err != nil {
+		logger.Error(ctx, "could not find new quiz comment author profile", "err", err.Error())
+		return nil, err
+	}
+
+	comment.Author = QuizCommentAuthor{
+		FirstName: *authorProfile.FirstName,
+		LastName:  *authorProfile.LastName,
+		Avatar:    *authorProfile.Avatar,
+	}
+
+	return &comment, nil
+}
+
+func (s *Service) GetQuizComments(ctx context.Context, solvedQuizId int64) ([]QuizComment, error) {
+	comments, err := s.repo.GetQuizComments(ctx, solvedQuizId)
+
+	if err != nil {
+		logger.Error(ctx, "could not find quiz comments", "err", err.Error(), "solvedQuizId", solvedQuizId)
+		return comments, common.ErrInternalError
+	}
+
+	return comments, nil
+}
+
+func (s *Service) UpdateQuizComment(ctx context.Context, dto UpdateQuizComment) error {
+	if dto.Text == "" {
+		return common.ErrEmptyQuizCommentText
+	}
+
+	err := s.repo.UpdateQuizComment(ctx, dto)
+
+	if err != nil {
+		logger.Error(ctx, "could not update quiz comment", "err", err.Error(), "quizCommentId", dto.CommentID)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) DeleteQuizComment(ctx context.Context, quizCommentId int64, authorId int64) error {
+	err := s.repo.DeleteQuizComment(ctx, quizCommentId, authorId)
+
+	if err != nil {
+		logger.Error(ctx, "could not delete quiz comment", "err", err.Error(), "quizCommentId", quizCommentId, "authorId", authorId)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) GetOfferForRegistration(ctx context.Context, offerSlug string) (*OfferForRegistration, error) {
+	offerCacheKey := cache.GetOfferForRegistrationKey(offerSlug)
+
+	offer := &OfferForRegistration{}
+
+	err := s.cache.Get(ctx, offerCacheKey, offer)
+
+	if err == nil {
+		return offer, nil
+	}
+
+	if !errors.Is(err, common.ErrCacheItemNotFound) {
+		logger.Error(ctx, "could not get cached offer", "err", err.Error(), "offerSlug", offerSlug)
+	}
+
+	offer, err = s.repo.GetOfferForRegistration(ctx, offerSlug)
+
+	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
+		return nil, err
+	}
+
+	if err != nil {
+		return nil, common.ErrInternalError
+	}
+
+	cacheTTL := time.Minute * 2
+	err = s.cache.Set(ctx, offerCacheKey, *offer, &cacheTTL)
+	if err != nil {
+		logger.Error(ctx, "could not set offer in cache", "err", err.Error(), "offerSlug", offerSlug)
+	}
+
+	return offer, nil
+}
+
+func (s *Service) GetOfferForProcessing(ctx context.Context, offerSlug string) (*OfferForProcessing, error) {
+	offer, err := s.repo.GetOfferForProcessing(ctx, offerSlug)
+	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
+		return nil, err
+	}
+
+	if err != nil {
+		return nil, common.ErrInternalError
+	}
+
+	return offer, nil
+}
+
+func (s *Service) ProcessOffer(ctx context.Context, dto ProcessOfferDTO) (*ProcessOfferResult, error) {
+	// Шаг 1. Получить оффер со всеми полями
+	offer, err := s.repo.GetOfferForProcessing(ctx, dto.Slug)
+	if err != nil {
+		logger.Info(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Info(ctx, "got offer", "offer_id", offer.ID)
+
+	payMethod, err := s.repo.GetPayMethod(ctx, dto.SelectedPayMethod, offer.ProjectID)
+	if err != nil {
+		logger.Error(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Info(ctx, "found pay method", "pay_method_id", payMethod.ID)
+
+	offer.PayMethod = payMethod
+
+	// Шаг 2. Зарегистрировать пользователя
+	userId, _, err := s.createUser(ctx, CreateUserDTO{
+		FirstName: dto.FirstName,
+		Email:     dto.Email,
+	})
+
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Info(ctx, "created user", "user_id", userId)
+
+	dto.UserID = userId
+
+	result := ProcessOfferResult{}
+
+	// Шаг 3. Обновить информацию о пользователе
+	err = s.repo.UpdateUserInfo(ctx, UpdateUserInfoDTO{
+		UserID:    userId,
+		Phone:     dto.Phone,
+		Telegram:  dto.Telegram,
+		Instagram: dto.Instagram,
+	})
+	if err != nil {
+		logger.Error(ctx, err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Info(ctx, "updated user", "user_id", userId)
+
+	// Шаг 4. Если оффер бесплатный, сделать доставку того, что дает оффер
+	if offer.IsFree {
+		err = s.enrollUser(ctx, userId, dto.Email, offer)
+		if err != nil {
+			return nil, err
+		}
+
+		result.Message = *offer.SuccessMessage
+		result.RedirectURL = *offer.RedirectURL
+
+		logger.Info(ctx, "enrolled user", "user_id", userId, "offer_id", offer.ID)
+
+		return &result, nil
+	}
+
+	// Шаг 4. Если оффер платный, создать заказ и вернуть ссылку на оплату
+	payment, err := s.createPayment(ctx, CreatePaymentDTO{
+		PayMethod:        offer.PayMethod,
+		UserID:           dto.UserID,
+		Email:            dto.Email,
+		Phone:            dto.Phone,
+		OrderDescription: offer.Name,
+		OfferID:          offer.ID,
+		Price:            offer.Price,
+		// TODO: отправка письма о создании заказа может быть отключена
+	})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "created payment", "payment_id", payment.PaymentID, "order_id", payment.OrderID, "payment_url", payment.PaymentURL)
+
+	result.RedirectURL = payment.PaymentURL
+
+	return &result, nil
+}
+
+func (s *Service) createPayment(ctx context.Context, dto CreatePaymentDTO) (*payments.GetPaymentLinkResult, error) {
+	if dto.PayMethod == nil {
+		return nil, common.ErrInternalError
+	}
+
+	// создать заказ
+	orderId, err := s.createOrder(ctx, dto.UserID, dto.PayMethod.ID, dto.OfferID)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	// создать ссылку на оплату
+	paymentSystem := payments.NewPaymentSystem(dto.PayMethod.Type)
+	if paymentSystem == nil {
+		return nil, common.ErrPaymentSystemNotFound
+	}
+
+	paymentResult, err := paymentSystem.GetPaymentLink(ctx, payments.GetPaymentLinkPayload{
+		Email:           dto.Email,
+		Description:     dto.OrderDescription,
+		Amount:          dto.Price,
+		Phone:           dto.Phone,
+		Login:           dto.PayMethod.Login,
+		Password:        dto.PayMethod.Password,
+		OrderId:         orderId,
+		SendReceipt:     dto.PayMethod.SendReceipt,
+		ReceiptSettings: dto.PayMethod.ReceiptSettings,
+	})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	// Обновить paymentId в созданного заказа
+	// paymentId у платежных систем генерируется со ссылкой для оплаты
+	err = s.repo.UpdateOrderPaymentId(ctx, paymentResult.OrderID, paymentResult.PaymentID)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
+	}
+
+	// отправить письмо, что заказ создан
+	err = s.sendOrderCreatedEmail(ctx, dto.Email, dto.OrderDescription, dto.Price, paymentResult.PaymentURL)
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+
+	return paymentResult, nil
+}
+
+func (s *Service) createOrder(ctx context.Context, userId int64, payMethodId int64, offerId int64) (int64, error) {
+	newOrder := NewOrder{
+		UserID:        userId,
+		OfferID:       offerId,
+		IntegrationID: payMethodId,
+	}
+
+	orderId, err := s.repo.CreateOrder(ctx, newOrder)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return 0, common.ErrInternalError
+	}
+
+	return orderId, nil
+}
+
+func (s *Service) enrollUser(ctx context.Context, userId int64, userEmail string, offer *OfferForProcessing) error {
+	groups, err := s.repo.GetOfferGroups(ctx, offer.ID)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return common.ErrInternalError
+	}
+
+	err = s.repo.AddUserToGroups(ctx, userId, groups)
+	if err != nil {
+		logger.Log.ErrorContext(ctx, err.Error())
+		return common.ErrInternalError
+	}
+
+	if offer.SendRegistrationEmail {
+		err = s.sendEnrollmentEmail(ctx, userEmail, *offer.RegistrationEmailTheme, *offer.RegistrationEmail)
+		if err != nil {
+			logger.Error(ctx, err.Error())
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) {
@@ -74,6 +393,161 @@ func (s *Service) GetProfile(ctx context.Context, userId int) (*Profile, error) 
 	}
 
 	return profile, nil
+}
+
+func (s *Service) ProcessTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody) error {
+	// Отформатировать статус
+	status := payments.FormatStatus(payload.Status)
+
+	orderId, err := strconv.ParseInt(payload.OrderId, 10, 64)
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not parse int64 from orderId %s", payload.OrderId), "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	// Получить заказ
+	order, err := s.repo.FindOrderById(ctx, orderId)
+	if err != nil {
+		if !errors.Is(err, common.ErrOrderNotFound) {
+			logger.Error(ctx, fmt.Sprintf("could not get order by id %s", payload.OrderId), "err", err.Error())
+			return common.ErrInternalError
+		}
+	}
+
+	// Провалидировать данные
+	err = s.validateTinkoffWebhook(ctx, payload, order)
+	if err != nil {
+		return err
+	}
+
+	logger.Info(ctx, "got valid order tinkoff webhook", "orderId", orderId, "status", status)
+
+	// Обновить заказ
+	cardInfo := OrderCardInfo{
+		ExpirationDate: payload.ExpDate,
+		Pan:            payload.Pan,
+	}
+
+	orderError := OrderError{
+		Message:    payload.Message,
+		Details:    payload.Details,
+		StatusCode: payload.ErrorCode,
+	}
+
+	if payload.ErrorCode == "" {
+		orderError.StatusCode = "0"
+	}
+
+	err = s.repo.UpdateOrderStatus(ctx, order.ID, status, orderError, cardInfo)
+	if err != nil {
+		return common.ErrInternalError
+	}
+
+	if status == payments.StatusSucceeded {
+		err = s.processSucceededOrder(ctx, order)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) ProcessProdamusWebhook(ctx context.Context, payload ProdamusWebhookBody) error {
+	// Отформатировать статус
+	status := payments.FormatStatus(payload.PaymentStatus)
+
+	orderId, err := strconv.ParseInt(payload.OrderNum, 10, 64)
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("could not parse int64 from orderId %s", payload.OrderId), "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	// Получить заказ
+	order, err := s.repo.FindOrderById(ctx, orderId)
+	if err != nil {
+		if !errors.Is(err, common.ErrOrderNotFound) {
+			logger.Error(ctx, fmt.Sprintf("could not get order by id %d", orderId), "err", err.Error())
+			return common.ErrInternalError
+		}
+	}
+
+	// Провалидировать данные
+	err = s.validateProdamusWebhook(ctx, payload, order)
+	if err != nil {
+		return err
+	}
+
+	logger.Info(ctx, "got valid order prodamus webhook", "orderId", orderId, "status", status)
+
+	// Обновить заказ
+	cardInfo := OrderCardInfo{}
+
+	orderError := OrderError{
+		Message:    payload.PaymentStatusDescription,
+		StatusCode: "0",
+	}
+
+	if status != payments.StatusSucceeded {
+		orderError.StatusCode = "1"
+	}
+
+	err = s.repo.UpdateOrderStatus(ctx, order.ID, status, orderError, cardInfo)
+	if err != nil {
+		return common.ErrInternalError
+	}
+
+	if status == payments.StatusSucceeded {
+		err = s.processSucceededOrder(ctx, order)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) processSucceededOrder(ctx context.Context, order *OrderForProcessing) error {
+
+	// Выдать пользователю оффер
+	offer, err := s.GetOfferForProcessing(ctx, order.OfferSlug)
+	if err != nil {
+		logger.Error(ctx, "could not find offer for processing", "order_id", order.ID, "offer_slug", order.OfferSlug, "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	err = s.sendOrderCompletedEmail(ctx, order.UserEmail, offer.Name, offer.Price)
+	if err != nil {
+		logger.Error(ctx, "could not send order completed email", "order", order.ID, "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	err = s.enrollUser(ctx, order.UserID, order.UserEmail, offer)
+	if err != nil {
+		logger.Error(ctx, "could not enroll user", "order", order.ID, "err", err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) validateProdamusWebhook(ctx context.Context, payload ProdamusWebhookBody, order *OrderForProcessing) error {
+	if order.PaymentID != payload.OrderId {
+		logger.Error(ctx, "order payment id not equal with webhook payment id", "order_payment_id", order.PaymentID, "webhook_payment_id", payload.OrderId)
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) validateTinkoffWebhook(ctx context.Context, payload TinkoffWebhookBody, order *OrderForProcessing) error {
+	if order.PaymentID != strconv.Itoa(int(payload.PaymentId)) {
+		logger.Error(ctx, "order payment id not equal with webhook payment id", "order_payment_id", order.PaymentID, "webhook_payment_id", payload.PaymentId)
+		return common.ErrInternalError
+	}
+
+	if order.Price != payload.Amount {
+		logger.Error(ctx, "order price not equal with webhook amount", "order_price", order.Price, "webhook_amount", payload.Amount, "order_id", order.ID)
+		return common.ErrInternalError
+	}
+
+	return nil
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, userId int, profile UpdateProfileBody) error {
@@ -455,34 +929,187 @@ func (s *Service) GetQuizBySlug(ctx context.Context, slug string) (*Quiz, error)
 	return quiz, nil
 }
 
-func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {
+func (s *Service) generatePassword() (string, error) {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,."
+	const passwordLength = 8
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+	charsetLength := big.NewInt(int64(len(chars)))
+	password := make([]byte, passwordLength)
 
-	if err != nil {
-		return nil, common.ErrInternalError
+	for i := range password {
+		num, err := rand.Int(rand.Reader, charsetLength)
+		if err != nil {
+			return "", err
+		}
+		password[i] = chars[num.Int64()]
 	}
 
+	return string(password), nil
+}
+
+func (s *Service) createUserPassword(ctx context.Context, userPassword string) (string, string, error) {
+	// сгенерировать пароль — если отсутствует
+	if userPassword == "" {
+		password, err := s.generatePassword()
+		if err != nil {
+			logger.Log.Error(err.Error())
+			return "", "", nil
+		}
+		userPassword = password
+	}
+
+	// заэшировать пароль
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(userPassword), 10)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return "", "", nil
+	}
+
+	return string(hashedPassword), userPassword, nil
+}
+
+func (s *Service) createUser(ctx context.Context, dto CreateUserDTO) (int64, bool, error) {
+
+	// создать пароль для пользователя
+	hashedPassword, rawPassword, err := s.createUserPassword(ctx, dto.Password)
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return 0, false, common.ErrInternalError
+	}
+
+	// создать пользователя в базе
 	user := User{
-		Email:     body.Email,
-		Password:  string(hashedPassword),
-		FirstName: body.FirstName,
+		Email:     dto.Email,
+		Password:  hashedPassword,
+		FirstName: dto.FirstName,
 	}
 
-	result := SignUpResult{}
+	userId, err := s.repo.CreateUser(ctx, user)
 
-	err = s.repo.CreateUser(ctx, user)
+	var alreadyExists bool
 
 	if err != nil {
-
-		// Если ошибка — не является `пользователь уже существует`
-		// То выходим
 		if !errors.Is(err, common.ErrUserAlreadyExists) {
 			logger.Log.Error(err.Error(), "error", err)
-			return nil, common.ErrInternalError
+			return userId, alreadyExists, err
 		}
 
-		result.AlreadyExists = true
+		alreadyExists = true
+	}
+
+	if alreadyExists {
+		return userId, alreadyExists, nil
+	}
+
+	// отправить welcome-письмо
+	err = s.sendWelcomeEmail(ctx, user.Email, rawPassword)
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+
+	return userId, alreadyExists, err
+}
+
+func (s *Service) sendOrderCompletedEmail(ctx context.Context, userEmail string, ordered string, amount uint64) error {
+	email, err := s.emails.GetEmailByType(ctx, "order-completed")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+	}
+
+	email.Context["Ordered"] = ordered
+	email.Context["Amount"] = amount
+	email.Context["HeroURL"] = s.config.HeroAppBaseURL + "/login?way=password&email=" + userEmail
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) sendWelcomeEmail(ctx context.Context, userEmail string, userPassword string) error {
+	email, err := s.emails.GetEmailByType(ctx, "welcome")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+	}
+
+	email.Context["Email"] = userEmail
+	email.Context["Password"] = userPassword
+	email.Context["LoginURL"] = s.config.HeroAppBaseURL + "/login"
+	email.Context["LoginFullURL"] = s.config.HeroAppBaseURL + "/login?way=password&email=" + userEmail
+	email.Context["MailFrom"] = email.From.Email
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) sendOrderCreatedEmail(ctx context.Context, userEmail string, ordered string, amount uint64, paymentUrl string) error {
+	email, err := s.emails.GetEmailByType(ctx, "order-created")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+	}
+
+	email.Context["PaymentURL"] = paymentUrl
+	email.Context["Ordered"] = ordered
+	email.Context["Amount"] = amount
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	return nil
+}
+
+func (s *Service) sendEnrollmentEmail(ctx context.Context, userEmail string, emailSubject string, emailBody string) error {
+	email, err := s.emails.GetEmailByType(ctx, "general")
+
+	if err != nil {
+		logger.Log.Error(err.Error(), "error", err)
+		return common.ErrInternalError
+	}
+
+	email.Subject = emailSubject
+	email.Body = emailBody
+
+	err = s.emails.SendEmail(email, []string{userEmail})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.ErrInternalError
+	}
+
+	logger.Log.InfoContext(ctx, "send enrollment email", "user_email", userEmail, "email_subject", emailSubject)
+
+	return nil
+}
+
+func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, error) {
+
+	_, alreadyExists, err := s.createUser(ctx, CreateUserDTO{
+		FirstName: body.FirstName,
+		Email:     body.Email,
+		Password:  body.Password,
+	})
+
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return nil, common.ErrInternalError
 	}
 
 	// Находим только что созданного пользователя или уже существующего
@@ -493,28 +1120,10 @@ func (s *Service) Signup(ctx context.Context, body *SignupBody) (*SignUpResult, 
 		return nil, common.ErrInternalError
 	}
 
-	if !result.AlreadyExists {
-		email, err := s.emails.GetEmailByType(ctx, "welcome")
+	var result SignUpResult
 
-		if err != nil {
-			logger.Log.Error(err.Error(), "error", err)
-		}
-
-		email.Context["Email"] = body.Email
-		email.Context["Password"] = body.Password
-		email.Context["LoginURL"] = s.config.HeroAppBaseURL + "/login"
-		email.Context["LoginFullURL"] = s.config.HeroAppBaseURL + "/login?way=password&email=" + body.Email
-		email.Context["MailFrom"] = email.From.Email
-
-		err = s.emails.SendEmail(email, []string{body.Email})
-
-		if err != nil {
-			logger.Log.Error(err.Error())
-			return nil, common.ErrInternalError
-		}
-
+	if !alreadyExists {
 		result.Message = "Регистрация прошла успешно! На твою почту было отправлено письмо с данными для входа"
-
 		return &result, nil
 	}
 
@@ -687,7 +1296,7 @@ func (s *Service) ValidateJWTToken(ctx context.Context, token string) (*User, er
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return nil, common.ErrTokenExpired
 		}
-		if errors.As(err, &jwt.ErrTokenMalformed) {
+		if errors.Is(err, jwt.ErrTokenMalformed) {
 			return nil, common.ErrInvalidToken
 		}
 		return nil, err
@@ -716,10 +1325,11 @@ func (s *Service) passwordMatches(hash string, password string) bool {
 	return err == nil
 }
 
-func NewService(repo Storage, config *config.Config, emails IEmailsService) *Service {
+func NewService(repo Storage, config *config.Config, emails IEmailsService, cacheService cache.Cache) *Service {
 	return &Service{
 		repo:   repo,
 		config: config,
 		emails: emails,
+		cache:  cacheService,
 	}
 }

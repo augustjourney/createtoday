@@ -1,19 +1,24 @@
 package hero
 
 import (
+	"createtodayapi/internal/cache"
 	"createtodayapi/internal/config"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 )
 
-func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
+func NewHeroApp(db *sqlx.DB, redis *redis.Client, config *config.Config, app *fiber.App) *fiber.App {
 
 	postgres := NewPostgresRepo(db)
 	memory := NewMemoryRepo()
 
+	redisCache := cache.NewRedisCache(redis)
+	// memoryCache := cache.NewMemoryCache()
+
 	emailsService := NewEmailService(config, memory)
-	service := NewService(postgres, config, emailsService)
+	service := NewService(postgres, config, emailsService, redisCache)
 
 	controller := NewController(service)
 
@@ -39,6 +44,17 @@ func NewHeroApp(db *sqlx.DB, config *config.Config, app *fiber.App) *fiber.App {
 	hero.Get("/courses/:courseSlug/lessons/:lessonSlug/quizzes/:slug/solved", AuthMiddleware(service), controller.GetSolvedQuizzesForQuiz)
 	hero.Post("/courses/:courseSlug/lessons/:lessonSlug/quizzes/:slug/solved", AuthMiddleware(service), controller.SolveQuiz)
 	hero.Delete("/courses/:courseSlug/lessons/:lessonSlug/quizzes/:slug/solved", AuthMiddleware(service), controller.DeleteSolvedQuiz)
+
+	hero.Get("/offers/:slug", controller.GetOffer)
+	hero.Post("/offers/:slug", controller.ProcessOffer)
+
+	hero.Post("/webhooks/tinkoff", controller.TinkoffWebhook)
+	hero.Post("/webhooks/prodamus", controller.ProdamusWebhook)
+
+	hero.Get("/quizzes/:slug/solved/:id/comments", AuthMiddleware(service), controller.GetQuizComments)
+	hero.Post("/quizzes/:slug/solved/:id/comments", AuthMiddleware(service), controller.CreateQuizComment)
+	hero.Put("/quizzes/:slug/solved/:id/comments/:commentId", AuthMiddleware(service), controller.UpdateQuizComment)
+	hero.Delete("/quizzes/:slug/solved/:id/comments/:commentId", AuthMiddleware(service), controller.DeleteQuizComment)
 
 	return app
 }

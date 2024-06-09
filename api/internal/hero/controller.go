@@ -10,8 +10,10 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 type IController interface {
@@ -34,6 +36,12 @@ type IController interface {
 	// Quizzes
 	SolveQuiz(ctx *fiber.Ctx) error
 	DeleteSolvedQuiz(ctx *fiber.Ctx) error
+
+	// Offers
+	GetOffer(ctx *fiber.Ctx) error
+
+	// Webhooks
+	TinkoffWebhook(ctx *fiber.Ctx) error
 }
 
 type Controller struct {
@@ -494,6 +502,164 @@ func (c *Controller) DeleteSolvedQuiz(ctx *fiber.Ctx) error {
 	}
 
 	return common.DoApiResponse(ctx, http.StatusOK, "Выполненное задание удалено", nil)
+}
+
+func (c *Controller) GetOffer(ctx *fiber.Ctx) error {
+	offerSlug := ctx.Params("slug")
+
+	offer, err := c.service.GetOfferForRegistration(context.Background(), offerSlug)
+	if err != nil && errors.Is(err, common.ErrOfferNotFound) {
+		return common.DoApiResponse(ctx, http.StatusNotFound, nil, err)
+	}
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, offer, nil)
+}
+
+func (c *Controller) ProcessOffer(ctx *fiber.Ctx) error {
+	var body ProcessOfferDTO
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	body.Slug = ctx.Params("slug")
+
+	requestId, _ := uuid.NewRandom()
+	rCtx := context.WithValue(context.Background(), "request-id", requestId)
+	rCtx = context.WithValue(rCtx, "request-key", "process-offer")
+
+	result, err := c.service.ProcessOffer(rCtx, body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, result, nil)
+}
+
+func (c *Controller) TinkoffWebhook(ctx *fiber.Ctx) error {
+	var body TinkoffWebhookBody
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	rCtx := context.Background()
+
+	err = c.service.ProcessTinkoffWebhook(rCtx, body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, nil, nil)
+}
+
+func (c *Controller) ProdamusWebhook(ctx *fiber.Ctx) error {
+	var body ProdamusWebhookBody
+
+	rCtx := context.Background()
+
+	err := json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		logger.Error(rCtx, "could not process body for prodamus webhook", "err", err.Error())
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	err = c.service.ProcessProdamusWebhook(rCtx, body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, common.ErrInternalError)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, nil, nil)
+}
+
+func (c *Controller) GetQuizComments(ctx *fiber.Ctx) error {
+	solvedQuizId, err := strconv.ParseInt(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+	comments, err := c.service.GetQuizComments(context.Background(), solvedQuizId)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, comments, nil)
+}
+
+func (c *Controller) CreateQuizComment(ctx *fiber.Ctx) error {
+	solvedQuizId, err := strconv.ParseInt(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	var body NewQuizComment
+	err = json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+
+	body.AuthorID = int64(user.ID)
+	body.QuizSolvedID = solvedQuizId
+
+	newComment, err := c.service.CreateQuizComment(context.Background(), body)
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, newComment, err)
+}
+
+func (c *Controller) UpdateQuizComment(ctx *fiber.Ctx) error {
+	commentId, err := strconv.ParseInt(ctx.Params("commentId"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	var body UpdateQuizComment
+	err = json.Unmarshal(ctx.Body(), &body)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+
+	body.AuthorID = int64(user.ID)
+	body.CommentID = commentId
+
+	err = c.service.UpdateQuizComment(context.Background(), body)
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, true, err)
+}
+
+func (c *Controller) DeleteQuizComment(ctx *fiber.Ctx) error {
+	commentId, err := strconv.ParseInt(ctx.Params("commentId"), 10, 64)
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusBadRequest, nil, err)
+	}
+
+	user := ctx.Locals("user").(*User)
+
+	err = c.service.DeleteQuizComment(context.Background(), commentId, int64(user.ID))
+
+	if err != nil {
+		return common.DoApiResponse(ctx, http.StatusInternalServerError, nil, err)
+	}
+
+	return common.DoApiResponse(ctx, http.StatusOK, true, err)
 }
 
 func NewController(service IService) *Controller {
