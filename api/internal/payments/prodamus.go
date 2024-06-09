@@ -4,11 +4,12 @@ import (
 	"context"
 	"createtodayapi/internal/logger"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/google/uuid"
 )
 
 type ProdamusInitPayload struct {
@@ -38,7 +39,7 @@ func (t *Prodamus) GetPaymentLink(ctx context.Context, payload GetPaymentLinkPay
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", base.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, base.String(), nil)
 	if err != nil {
 		logger.Error(ctx, "error creating prodamus payment link", "err", err)
 		return nil, err

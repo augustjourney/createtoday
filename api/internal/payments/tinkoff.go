@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -68,7 +67,7 @@ func (p *TinkoffInitPayload) getValuesForToken() map[string]string {
 func (p *TinkoffInitPayload) sortValuesForToken(values map[string]string) []string {
 	keys := make([]string, 0, len(values))
 
-	for k, _ := range values {
+	for k := range values {
 		keys = append(keys, k)
 	}
 
@@ -161,7 +160,7 @@ func (t *Tinkoff) GetPaymentLink(ctx context.Context, payload GetPaymentLinkPayl
 	}
 
 	defer func() {
-		_ = resp.Body.Close()
+		resp.Body.Close()
 	}()
 
 	result := TinkoffInitResponse{}
@@ -172,7 +171,6 @@ func (t *Tinkoff) GetPaymentLink(ctx context.Context, payload GetPaymentLinkPayl
 	}
 
 	if !result.Success {
-		fmt.Println(result)
 		return nil, errors.New(result.Details)
 	}
 

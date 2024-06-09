@@ -1,11 +1,13 @@
 package hero
 
 import (
+	"createtodayapi/internal/cache"
 	"createtodayapi/internal/config"
 	"createtodayapi/internal/infra"
 	"createtodayapi/internal/logger"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func NewTestService() *Service {
@@ -19,8 +21,9 @@ func NewTestService() *Service {
 	}
 	postgres := NewPostgresRepo(db)
 	memory := NewMemoryRepo()
+	memoryCache := cache.NewMemoryCache()
 	emailsService := NewEmailService(conf, memory)
-	service := NewService(postgres, conf, emailsService)
+	service := NewService(postgres, conf, emailsService, memoryCache)
 	return service
 }
 
